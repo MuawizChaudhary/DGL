@@ -14,6 +14,7 @@ class View(nn.Module):
         self.shape = args
 
     def forward(self, x):
+        print(self.shape)
         return x.view(-1,*self.shape)
 
 class vgg_rep(nn.Module):
@@ -42,7 +43,7 @@ class vgg_greedy(nn.Module):
         self.main_cnn = vgg_rep(self.blocks)
         self.auxillary_nets[len(self.auxillary_nets)-1] = nn.Sequential(
             nn.MaxPool2d(kernel_size=2, stride=2),
-            View( 512*7*7),
+            View(512*7*7),
             nn.Linear(512 * 7 * 7, 4096),
             nn.ReLU(True),
             nn.Linear(4096, 4096),
@@ -53,6 +54,8 @@ class vgg_greedy(nn.Module):
 
     def make_layers(self, cfg, in_size, **kwargs):
         self.blocks = []
+        device = kwargs['device']
+
         self.auxillary_nets = nn.ModuleList([])
         in_channels = 3
         avg_size = 112
@@ -79,13 +82,14 @@ class vgg_greedy(nn.Module):
             model_c = auxillary_classifier2(in_size=in_size,
                                            n_lin=kwargs['nlin'], feature_size=in_channels,
                                            input_features=in_channels, mlp_layers=kwargs['mlp'],
-                                           batchn=True, num_classes=1000).cuda()
+                                           batchn=True, num_classes=1000).to(device)
             self.auxillary_nets.append(model_c)
 
     def make_layers_block(self, cfg, in_size, **kwargs):
         self.blocks = []
         self.auxillary_nets = nn.ModuleList([])
         block_size = kwargs['block_size']
+        device = kwargs['device']
         in_channels = 3
         avg_size = 112
 
@@ -114,7 +118,7 @@ class vgg_greedy(nn.Module):
                 model_c = auxillary_classifier2(in_size=in_size,
                                            n_lin=kwargs['nlin'], feature_size=in_channels,
                                            input_features=in_channels, mlp_layers=kwargs['mlp'],
-                                           batchn=True, num_classes=1000).cuda()
+                                           batchn=True, num_classes=1000).to(device)
                 self.auxillary_nets.append(model_c)
                 block_current = 0
                 layer = []
@@ -124,7 +128,7 @@ class vgg_greedy(nn.Module):
             model_c = auxillary_classifier2(in_size=in_size,
                                            n_lin=kwargs['nlin'], feature_size=in_channels,
                                            input_features=in_channels, mlp_layers=kwargs['mlp'],
-                                           batchn=True, num_classes=1000).cuda()
+                                           batchn=True, num_classes=1000).to(device)
             self.auxillary_nets.append(model_c)
 
     def _initialize_weights(self):

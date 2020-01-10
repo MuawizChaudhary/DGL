@@ -16,6 +16,7 @@ import datetime
 import itertools
 import time
 from models import auxillary_classifier2, Net
+from utils import to_one_hot, similarity_matrix
 
 #### Some helper functions
 class AverageMeter(object):
@@ -71,6 +72,18 @@ parser.add_argument('--block_size', type=int, default=1, help='block size')
 parser.add_argument('--name', default='',type=str,help='name')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
+parser.add_argument('--no-similarity-std', action='store_true', default=False,
+                    help='disable use of standard deviation in similarity matrix for feature maps')
+parser.add_argument('--bio', action='store_true', default=True,
+                    help='use more biologically plausible versions of pred and sim loss (default: False)')
+parser.add_argument('--loss-sup', default='predsim',
+                    help='supervised local loss, sim or pred (default: predsim)')
+parser.add_argument('--loss-unsup', default='none',
+                    help='unsupervised local loss, none, sim or recon (default: none)')
+parser.add_argument('--beta', type=float, default=0.99,
+                    help='fraction of similarity matching loss in predsim loss (default: 0.99)')
+
+
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -111,7 +124,9 @@ def main():
 
 
 
-    model = Net(aux_type=args.type_aux, block_size=args.block_size)
+    model = Net(aux_type=args.type_aux, block_size=args.block_size,
+            biological=args.bio)
+    print(args.block_size)
     model = model.cuda()
     
     ncnn = len(model.main_cnn.blocks)
@@ -155,6 +170,7 @@ def main():
             inputs = inputs.cuda(non_blocking = True)
             inputs = torch.autograd.Variable(inputs)
             targets = torch.autograd.Variable(targets)
+            target_one_hot = to_one_hot(targets)
 
 
             #Main loop
@@ -166,7 +182,45 @@ def main():
                 layer_optim[n].zero_grad()
                 outputs, representation = model(representation, n=n)
 
-                loss = criterion(outputs, targets)
+                # loss calculation 
+                if args.loss_sup == 'sim' or args.loss_sup == 'predsim':
+                    if args.bio:
+                        h_loss = representation.cuda()
+                    else:
+                        h_loss = model.auxillary_nets[n].linear_loss(representation).cuda()
+                    Rh = similarity_matrix(h_loss)
+             
+                if args.loss_sup == 'sim':
+                    if args.bio:
+                        Ry = similarity_matrix(model.auxillary_nets[n].proj_y(target_one_hot.cuda())).cuda().detach()
+                    else:
+                        Ry = similarity_matrix(target_one_hot.cuda()).detach()
+                    loss_sup = F.mse_loss(Rh, Ry)
+                elif args.loss_sup == 'pred':
+                    y_hat_local = model.auxillary_nets[n].decoder_y(representation.view(representation.size(0), -1).cuda())
+                    if args.bio:
+                        float_type =  torch.cuda.FloatTensor if args.cuda else torch.FloatTensor
+                        y_onehot_pred = model.auxillary_nets[n].proj_y(target_one_hot).gt(0).type(float_type).detach()
+                        loss_sup = F.binary_cross_entropy_with_logits(y_hat_local, y_onehot_pred)
+                    else:
+                        loss_sup = F.cross_entropy(y_hat_local,  y.detach())
+                elif args.loss_sup == 'predsim':                    
+                    y_hat_local = model.auxillary_nets[n].decoder_y(representation.view(representation.size(0), -1))
+                    if args.bio:
+                        Ry = similarity_matrix(model.auxillary_nets[n].proj_y(target_one_hot.cuda()).cuda()).detach()
+                        float_type =  torch.cuda.FloatTensor if args.cuda else torch.FloatTensor
+                        y_onehot_pred = self.proj_y(target_one_hot).gt(0).type(float_type).detach()
+                        loss_pred = (1-args.beta) * F.binary_cross_entropy_with_logits(y_hat_local, y_onehot_pred)
+                    else:
+                        Ry = similarity_matrix(target_one_hot).detach().cuda()
+                        loss_pred = (1-args.beta) * F.cross_entropy(y_hat_local,  targets.detach())
+                    loss_sim = args.beta * F.mse_loss(Rh, Ry)
+                    loss_sup = loss_pred + loss_sim
+           
+                #TODO Combine unsupervised and supervised loss
+                loss = loss_sup
+
+                #loss = criterion(outputs, targets)
                 loss.backward()
                 layer_optim[n].step()
 
@@ -176,7 +230,7 @@ def main():
                 batch_time[n].update(time.time() - end)
 
                 prec1 = accuracy(outputs.data, targets)
-                losses[n].update(float(loss.data[0]), float(inputs.size(0)))
+                losses[n].update(float(loss.data.item()), float(inputs.size(0)))
                 top1[n].update(float(prec1[0]), float(inputs.size(0)))
         for n in range(ncnn):
             ##### evaluate on validation set
@@ -200,6 +254,7 @@ def validate(val_loader, model, criterion, epoch, n):
             input = input.cuda(non_blocking=True)
             input = torch.autograd.Variable(input)
             target = torch.autograd.Variable(target)
+            target_one_hot = to_one_hot(target)
 
             representation = input
             output, _ = model(representation, n=n, upto=True)
@@ -208,7 +263,7 @@ def validate(val_loader, model, criterion, epoch, n):
             loss = criterion(output, target)
             # measure accuracy and record loss
             prec1 = accuracy(output.data, target)
-            losses.update(float(loss.data[0]), float(input.size(0)))
+            losses.update(float(loss.data.item()), float(input.size(0)))
             top1.update(float(prec1[0]), float(input.size(0)))
 
             # measure elapsed time
@@ -225,3 +280,6 @@ def validate(val_loader, model, criterion, epoch, n):
 
 if __name__ == '__main__':
     main()
+
+# Calculate supervised loss
+            

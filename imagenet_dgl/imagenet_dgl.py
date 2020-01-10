@@ -41,10 +41,11 @@ model_names = sorted(name for name in models.__dict__
 from random import randint
 import datetime
 import torch.nn.functional as F
+print(model_names)
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
-parser.add_argument('data', metavar='DIR',
+parser.add_argument('--data', '-d', metavar='DIR', default='../../data/CIFAR10/',
                     help='path to dataset')
-parser.add_argument('--arch', '-a', metavar='ARCH', default='vgg_19',
+parser.add_argument('--arch', '-a', metavar='ARCH', default='vgg19',
                     choices=model_names,
                     help='model architecture: ' +
                         ' | '.join(model_names) +
@@ -99,7 +100,9 @@ args.ensemble = args.ensemble>0
 args.debug = args.debug > 0
 
 device_ids = [i for i in range(torch.cuda.device_count())]
-ids_aux = [i%len(device_ids) for i in range(args.ncnn)]
+#device_ids = [1]
+print(device_ids)
+#ids_aux = [i%len(device_ids) for i in range(args.ncnn)]
 
 
 if args.half:
@@ -128,45 +131,40 @@ def main():
     elif args.large_size_images ==1:
         N_img = 224
         N_img_scale= 256
+        print('DD')
 
     in_size = N_img# // args.ds
     n_cnn = args.ncnn
 
     cudnn.benchmark = True
-
+    
     # Data loading code
     traindir = os.path.join(args.data, 'train')
     valdir = os.path.join(args.data, 'val')
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
-
-    train_dataset = datasets.ImageFolder(
-        traindir,
-        transforms.Compose([
-            transforms.RandomResizedCrop(N_img),
-
+    train_transform = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            normalize,
-        ]))
+            transforms.Normalize((0.424, 0.415, 0.384), (0.283, 0.278, 0.284))
+        ])
 
+    train_dataset = datasets.CIFAR10('../data/CIFAR10', train=True,
+            download=True, transform=train_transform)
+    test_transform = transforms.Compose([transforms.ToTensor(),
+                transforms.Normalize((0.424, 0.415, 0.384), (0.283, 0.278, 0.284))])
+    
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True, sampler=None)
-
-    val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(valdir, transforms.Compose([
-            transforms.Resize(N_img_scale),
-            transforms.CenterCrop(N_img),
-            transforms.ToTensor(),
-            normalize,
-        ])),
-        batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
-
+    val_loader  = torch.utils.data.DataLoader(datasets.CIFAR10('../data/CIFAR10',
+        train=False, download=True, transform=test_transform), batch_size=args.batch_size, 
+        shuffle=False, num_workers=args.workers, pin_memory=True)
+    device = 'cpu'
 #### #### To simplify data parallelism we make an nn module with multiple outs
     model = models.__dict__[args.arch](nlin=args.nlin,
-                                       mlp=args.mlp, block_size=args.block_size).cuda()
+                                       mlp=args.mlp,
+                                       block_size=args.block_size,
+                                       device=device).to(device)
 
     args.ncnn = len(model.main_cnn.blocks)
     n_cnn = len(model.main_cnn.blocks)
@@ -194,7 +192,8 @@ def main():
         model.load_state_dict(model_dict)
         print('model loaded')
 ######################### Lets do the training
-    criterion = nn.CrossEntropyLoss().cuda()
+    criterion = nn.CrossEntropyLoss().to(device)
+
     for epoch in range(args.start_epoch,num_ep):
         # Make sure we set the bn right
         model.train()
@@ -227,10 +226,11 @@ def main():
             # measure data loading time
             data_time.update(time.time() - end)
 
-            targets = targets.cuda(non_blocking = True)
-            inputs = inputs.cuda(non_blocking = True)
+            targets = targets.to(device)
+            inputs = inputs.to(device)
             inputs = torch.autograd.Variable(inputs)
             targets = torch.autograd.Variable(targets)
+            print(inputs.size())
             if args.half:
                 inputs = inputs.half()
 
@@ -265,7 +265,7 @@ def main():
                 batch_time[n].update(time.time() - end)
 
                 prec1, prec5 = accuracy(outputs.data, targets, topk=(1, 5))
-                losses[n].update(float(loss.data[0]), float(inputs.size(0)))
+                losses[n].update(float(loss.data.item()), float(inputs.size(0)))
                 top1[n].update(float(prec1[0]), float(inputs.size(0)))
                 top5[n].update(float(prec5[0]), float(inputs.size(0)))
 
@@ -330,8 +330,8 @@ def validate(val_loader, model, criterion, epoch, n):
     with torch.no_grad():
         total = 0
         for i, (input, target) in enumerate(val_loader):
-            target = target.cuda(non_blocking=True)
-            input = input.cuda(non_blocking=True)
+            target = target.to(device)
+            input = input.to(device)
             input = torch.autograd.Variable(input)
             target = torch.autograd.Variable(target)
             if args.half:

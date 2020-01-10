@@ -32,7 +32,7 @@ from random import randint
 import datetime
 import torch.nn.functional as F
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
-parser.add_argument('data', metavar='DIR',
+parser.add_argument('data', metavar='DIR', default='',
                     help='path to dataset')
 parser.add_argument('--arch', '-a', metavar='ARCH', default='vgg19_bn',
                     choices=model_names,
