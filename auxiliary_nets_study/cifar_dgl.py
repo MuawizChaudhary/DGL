@@ -74,7 +74,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 parser.add_argument('--no-similarity-std', action='store_true', default=False,
                     help='disable use of standard deviation in similarity matrix for feature maps')
-parser.add_argument('--bio', action='store_true', default=True,
+parser.add_argument('--bio', action='store_true', default=False,
                     help='use more biologically plausible versions of pred and sim loss (default: False)')
 parser.add_argument('--loss-sup', default='predsim',
                     help='supervised local loss, sim or pred (default: predsim)')
@@ -86,6 +86,7 @@ parser.add_argument('--beta', type=float, default=0.99,
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
+print(torch.cuda.FloatTensor)
 
 torch.manual_seed(args.seed)
 if args.cuda:
@@ -103,6 +104,8 @@ with open(name_log_txt, "a") as text_file:
 def main():
     global args, best_prec1
     args = parser.parse_args()
+    args.cuda = not args.no_cuda and torch.cuda.is_available()
+
 
 
     transform_train = transforms.Compose([
@@ -169,8 +172,8 @@ def main():
             targets = targets.cuda(non_blocking = True)
             inputs = inputs.cuda(non_blocking = True)
             inputs = torch.autograd.Variable(inputs)
-            targets = torch.autograd.Variable(targets)
-            target_one_hot = to_one_hot(targets)
+            targets = torch.autograd.Variable(targets).cuda()
+            target_one_hot = to_one_hot(targets).cuda()
 
 
             #Main loop
@@ -180,24 +183,27 @@ def main():
                 end = time.time()
                 # Forward
                 layer_optim[n].zero_grad()
+
                 outputs, representation = model(representation, n=n)
+                outputs = outputs.cuda()
+                representation = representation.cuda()
 
                 # loss calculation 
                 if args.loss_sup == 'sim' or args.loss_sup == 'predsim':
                     if args.bio:
-                        h_loss = representation.cuda()
+                        h_loss = representation
                     else:
-                        h_loss = model.auxillary_nets[n].linear_loss(representation).cuda()
+                        h_loss = model.auxillary_nets[n].linear_loss(representation)
                     Rh = similarity_matrix(h_loss)
              
                 if args.loss_sup == 'sim':
                     if args.bio:
-                        Ry = similarity_matrix(model.auxillary_nets[n].proj_y(target_one_hot.cuda())).cuda().detach()
+                        Ry = similarity_matrix(model.auxillary_nets[n].proj_y(target_one_hot)).detach()
                     else:
-                        Ry = similarity_matrix(target_one_hot.cuda()).detach()
+                        Ry = similarity_matrix(target_one_hot).detach()
                     loss_sup = F.mse_loss(Rh, Ry)
                 elif args.loss_sup == 'pred':
-                    y_hat_local = model.auxillary_nets[n].decoder_y(representation.view(representation.size(0), -1).cuda())
+                    y_hat_local = model.auxillary_nets[n].decoder_y(representation.view(representation.size(0), -1))
                     if args.bio:
                         float_type =  torch.cuda.FloatTensor if args.cuda else torch.FloatTensor
                         y_onehot_pred = model.auxillary_nets[n].proj_y(target_one_hot).gt(0).type(float_type).detach()
@@ -207,9 +213,9 @@ def main():
                 elif args.loss_sup == 'predsim':                    
                     y_hat_local = model.auxillary_nets[n].decoder_y(representation.view(representation.size(0), -1))
                     if args.bio:
-                        Ry = similarity_matrix(model.auxillary_nets[n].proj_y(target_one_hot.cuda()).cuda()).detach()
+                        Ry = similarity_matrix(model.auxillary_nets[n].proj_y(target_one_hot)).detach()
                         float_type =  torch.cuda.FloatTensor if args.cuda else torch.FloatTensor
-                        y_onehot_pred = self.proj_y(target_one_hot).gt(0).type(float_type).detach()
+                        y_onehot_pred = model.auxillary_nets[n].proj_y(target_one_hot).gt(0).type(float_type).detach()
                         loss_pred = (1-args.beta) * F.binary_cross_entropy_with_logits(y_hat_local, y_onehot_pred)
                     else:
                         Ry = similarity_matrix(target_one_hot).detach().cuda()
