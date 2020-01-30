@@ -21,7 +21,7 @@ class rep(nn.Module):
       
 class Net(nn.Module):
     def __init__(self, depth=6, num_classes=10, aux_type='mlp', block_size=1,
-                 feature_size=128, downsample=None):
+                 feature_size=128, downsample=None, dropout_p=0.1):
         super(Net, self).__init__()
 
         if aux_type == 'mlp':
@@ -30,6 +30,8 @@ class Net(nn.Module):
             nlin=3; mlp_layers=3; cnn=False
         elif aux_type == 'cnn':
             nlin=2; mlp_layers=0; cnn = True
+
+        self.dropout_p = dropout_p
 
         if downsample is None:
             downsample = [1,3]
@@ -40,7 +42,8 @@ class Net(nn.Module):
 
         self.blocks.append(nn.Sequential(
             nn.Conv2d(3, feature_size, kernel_size=3, padding=1),
-            nn.BatchNorm2d(feature_size), nn.ReLU()
+            nn.BatchNorm2d(feature_size), nn.ReLU(), torch.nn.Dropout2d(p=self.dropout_p, inplace=False)
+
         ))
 
         self.auxillary_nets.append(
@@ -107,6 +110,11 @@ class auxillary_classifier2(nn.Module):
         self.cnn = cnn
         feature_size = input_features
         self.blocks = []
+        #TODO make argument
+        self.dropout_p = 0.1
+        self.dropout = torch.nn.Dropout2d(p=self.dropout_p, inplace=False)
+
+
         for n in range(self.n_lin):
             if n==0:
                 input_features = input_features
@@ -142,7 +150,7 @@ class auxillary_classifier2(nn.Module):
 
 
                 layers +=[nn.Linear(in_feat,mlp_feat),
-                              bn_temp,nn.ReLU(True)]
+                              bn_temp,nn.ReLU(True), torch.nn.Dropout(p=self.dropout_p, inplace=False)]
             layers += [nn.Linear(mlp_feat,num_classes)]
             self.classifier = nn.Sequential(*layers)
             self.mlp = True
@@ -161,6 +169,7 @@ class auxillary_classifier2(nn.Module):
         for n in range(self.n_lin):
             out = self.blocks[n](out)
             out = F.relu(out)
+            out = self.dropout(out)
 
         out = F.adaptive_avg_pool2d(out, (2,2))
         if not self.mlp:

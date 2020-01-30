@@ -124,8 +124,7 @@ def main():
     for n in range(ncnn):
         to_train = itertools.chain(model.main_cnn.blocks[n].parameters(),
                                            model.auxillary_nets[n].parameters())
-        layer_optim[n] = optim.SGD(to_train, lr=layer_lr[n], momentum=0.9,  
-                                  weight_decay=5e-4)
+        layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n], weight_decay=5e-4)
 
 ######################### Lets do the training
     criterion = nn.CrossEntropyLoss().cuda()
@@ -176,7 +175,7 @@ def main():
                 batch_time[n].update(time.time() - end)
 
                 prec1 = accuracy(outputs.data, targets)
-                losses[n].update(float(loss.data[0]), float(inputs.size(0)))
+                losses[n].update(float(loss.item()), float(inputs.size(0)))
                 top1[n].update(float(prec1[0]), float(inputs.size(0)))
         for n in range(ncnn):
             ##### evaluate on validation set
@@ -208,7 +207,7 @@ def validate(val_loader, model, criterion, epoch, n):
             loss = criterion(output, target)
             # measure accuracy and record loss
             prec1 = accuracy(output.data, target)
-            losses.update(float(loss.data[0]), float(input.size(0)))
+            losses.update(float(loss.item()), float(input.size(0)))
             top1.update(float(prec1[0]), float(input.size(0)))
 
             # measure elapsed time
