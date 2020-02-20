@@ -16,6 +16,8 @@ import datetime
 import itertools
 import time
 from models import auxillary_classifier2, Net
+from bisect import bisect_right
+import wandb
 
 #### Some helper functions
 class AverageMeter(object):
@@ -52,8 +54,9 @@ def accuracy(output, target, topk=(1,)):
 
 
 #####
-def lr_scheduler(lr_0,epoch):
-    lr = lr_0*0.2**(epoch // 15)
+def lr_scheduler(lr_0, epoch):
+    lr = lr_0 * .25  ** bisect_right([200, 300, 350,375], epoch)
+    #lr = lr_0*0.2**(epoch // 15)
     return lr
 
 # Training settings
@@ -62,18 +65,18 @@ parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 64)')
 parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                     help='input batch size for testing (default: 1000)')
-parser.add_argument('--epochs', type=int, default=50, metavar='N',
+parser.add_argument('--epochs', type=int, default=400, metavar='N',
                     help='number of epochs to train (default: 10)')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
-parser.add_argument('--type_aux', type=str, default='mlp-sr',metavar='N')
+parser.add_argument('--type_aux', type=str, default='mlp',metavar='N')
 parser.add_argument('--block_size', type=int, default=1, help='block size')
 parser.add_argument('--name', default='',type=str,help='name')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
-
+wandb.init(config=args)
 torch.manual_seed(args.seed)
 if args.cuda:
     torch.cuda.manual_seed(args.seed)
@@ -113,6 +116,7 @@ def main():
 
     model = Net(aux_type=args.type_aux, block_size=args.block_size)
     model = model.cuda()
+    wandb.watch(model)
     
     ncnn = len(model.main_cnn.blocks)
     n_cnn = len(model.main_cnn.blocks)
@@ -120,7 +124,7 @@ def main():
         print(model, file=text_file)
     ############### Initialize all
     layer_optim = [None] * ncnn
-    layer_lr = [0.1] * ncnn
+    layer_lr = [1e-4] * ncnn
     for n in range(ncnn):
         to_train = itertools.chain(model.main_cnn.blocks[n].parameters(),
                                            model.auxillary_nets[n].parameters())
@@ -141,7 +145,7 @@ def main():
 
 
         for n in range(ncnn):
-            layer_lr[n] = lr_scheduler(0.1, epoch-1)
+            layer_lr[n] = lr_scheduler(1e-4, epoch-1)
             for param_group in layer_optim[n].param_groups:
                 param_group['lr'] = layer_lr[n]
         end = time.time()
@@ -217,6 +221,7 @@ def validate(val_loader, model, criterion, epoch, n):
             total += input.size(0)
         print(' * Prec@1 {top1.avg:.3f}'
               .format(top1=top1))
+        wandb.log({"top1": top1.avg})
 
 
     return top1.avg

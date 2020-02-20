@@ -23,18 +23,20 @@ class Net(nn.Module):
     def __init__(self, depth=6, num_classes=10, aux_type='mlp', block_size=1,
                  feature_size=128, downsample=None, dropout_p=0.1):
         super(Net, self).__init__()
-
+        print(aux_type)
         if aux_type == 'mlp':
-            nlin=0; mlp_layers=3; cnn=False
+            nlin=0; mlp_layers=0; cnn=False
         elif aux_type == 'mlp-sr':
             nlin=3; mlp_layers=3; cnn=False
         elif aux_type == 'cnn':
             nlin=2; mlp_layers=0; cnn = True
 
         self.dropout_p = dropout_p
+        self.dropout_module = torch.nn.Dropout2d
+        self.relu = nn.ReLU()
 
         if downsample is None:
-            downsample = [1,3]
+            downsample = [2, 4, 6]
 
         self.blocks = nn.ModuleList([])
         self.auxillary_nets = nn.ModuleList([])
@@ -42,8 +44,7 @@ class Net(nn.Module):
 
         self.blocks.append(nn.Sequential(
             nn.Conv2d(3, feature_size, kernel_size=3, padding=1),
-            nn.BatchNorm2d(feature_size), nn.ReLU(), torch.nn.Dropout2d(p=self.dropout_p, inplace=False)
-
+            nn.BatchNorm2d(feature_size), self.relu, self.dropout_module(p=self.dropout_p, inplace=False)
         ))
 
         self.auxillary_nets.append(
@@ -56,14 +57,15 @@ class Net(nn.Module):
                 self.blocks.append(nn.Sequential(
                     nn.MaxPool2d((2,2)),
                     nn.Conv2d(feature_size, feature_size*2, kernel_size=3, padding=1),
-                    nn.BatchNorm2d(feature_size*2), nn.ReLU()
+                    nn.BatchNorm2d(feature_size*2), self.relu,
+                    self.dropout_module(p=self.dropout_p, inplace=False)
                 ))
                 self.in_size/=2
                 feature_size*=2
             else:
                 self.blocks.append(nn.Sequential(
                     nn.Conv2d(feature_size, feature_size, kernel_size=3, padding=1),
-                    nn.BatchNorm2d(feature_size), nn.ReLU()
+                    nn.BatchNorm2d(feature_size), self.relu, self.dropout_module(p=self.dropout_p, inplace=False)
                 ))
 
 
@@ -75,7 +77,7 @@ class Net(nn.Module):
 
         self.auxillary_nets.append(auxillary_classifier2(input_features=feature_size,
                                           in_size=self.in_size, num_classes=num_classes,
-                                          n_lin=0,mlp_layers=2))
+                                          n_lin=nlin,mlp_layers=mlp_layers))
 
         if block_size>1:
             len_layers = len(self.blocks)
@@ -98,7 +100,6 @@ class Net(nn.Module):
         representation = self.main_cnn.forward(representation, n, upto=upto)
         outputs = self.auxillary_nets[n](representation)
         return outputs, representation
-
 
 
 class auxillary_classifier2(nn.Module):
@@ -150,7 +151,7 @@ class auxillary_classifier2(nn.Module):
 
 
                 layers +=[nn.Linear(in_feat,mlp_feat),
-                              bn_temp,nn.ReLU(True), torch.nn.Dropout(p=self.dropout_p, inplace=False)]
+                              bn_temp,nn.ReLU(True)]
             layers += [nn.Linear(mlp_feat,num_classes)]
             self.classifier = nn.Sequential(*layers)
             self.mlp = True
@@ -169,7 +170,7 @@ class auxillary_classifier2(nn.Module):
         for n in range(self.n_lin):
             out = self.blocks[n](out)
             out = F.relu(out)
-            out = self.dropout(out)
+            #out = self.dropout(out)
 
         out = F.adaptive_avg_pool2d(out, (2,2))
         if not self.mlp:
