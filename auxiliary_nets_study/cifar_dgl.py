@@ -74,6 +74,8 @@ parser.add_argument('--block_size', type=int, default=1, help='block size')
 parser.add_argument('--name', default='',type=str,help='name')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
+parser.add_argument('--lr', type=float, default=5e-4, help='block size')
+
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 wandb.init(config=args)
@@ -124,7 +126,7 @@ def main():
         print(model, file=text_file)
     ############### Initialize all
     layer_optim = [None] * ncnn
-    layer_lr = [1e-4] * ncnn
+    layer_lr = [args.lr] * ncnn
     for n in range(ncnn):
         to_train = itertools.chain(model.main_cnn.blocks[n].parameters(),
                                            model.auxillary_nets[n].parameters())
@@ -145,7 +147,7 @@ def main():
 
 
         for n in range(ncnn):
-            layer_lr[n] = lr_scheduler(1e-4, epoch-1)
+            layer_lr[n] = lr_scheduler(args.lr, epoch-1)
             for param_group in layer_optim[n].param_groups:
                 param_group['lr'] = layer_lr[n]
         end = time.time()

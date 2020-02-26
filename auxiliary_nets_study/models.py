@@ -20,8 +20,8 @@ class rep(nn.Module):
         return out
       
 class Net(nn.Module):
-    def __init__(self, depth=6, num_classes=10, aux_type='mlp', block_size=1,
-                 feature_size=128, downsample=None, dropout_p=0.1):
+    def __init__(self, depth=8, num_classes=10, aux_type='mlp', block_size=1,
+                 feature_size=128, downsample=None, dropout_p=0.2):
         super(Net, self).__init__()
         print(aux_type)
         if aux_type == 'mlp':
@@ -33,7 +33,7 @@ class Net(nn.Module):
 
         self.dropout_p = dropout_p
         self.dropout_module = torch.nn.Dropout2d
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU()#nn.LeakyReLU(negative_slope=0.01)
 
         if downsample is None:
             downsample = [2, 4, 6]
@@ -112,7 +112,7 @@ class auxillary_classifier2(nn.Module):
         feature_size = input_features
         self.blocks = []
         #TODO make argument
-        self.dropout_p = 0.1
+        self.dropout_p = 0.2
         self.dropout = torch.nn.Dropout2d(p=self.dropout_p, inplace=False)
 
 
