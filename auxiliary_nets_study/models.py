@@ -319,6 +319,7 @@ class Auxillery(nn.Module):
                 ks_h, ks_w = 1, 1
                 dim_out_h, dim_out_w = dim_out, dim_out
                 dim_in_decoder = num_out*dim_out_h*dim_out_w
+                print(dim_in_decoder, num_out, dim_out, dim_out_w)
                 while dim_in_decoder > args.dim_in_decoder and ks_h < dim_out:
                     ks_h*=2
                     dim_out_h = math.ceil(dim_out / ks_h)
@@ -376,7 +377,7 @@ class Net(nn.Module):
             layer_out.weight.data.zero_()
         
         self.layers.extend([layer_out])
-        self.auxillery_layers.extend([nn.Identity()])
+        self.auxillery_layers.extend([nn.Identity(1)])
             
     def parameters(self):
         if not args.backprop:
@@ -429,10 +430,13 @@ class VGGn(nn.Module):
         else:
             classifier = nn.Linear(output_dim*output_dim*int(output_ch * feat_mult), num_classes)
             features.append(classifier)
-            auxillery_layers.append(nn.Identity)
+            auxillery_layers.append(nn.Identity(1))
 
+        #self.main_cnn = rep(nn.ModuleList(features))
         self.features = nn.ModuleList(features)
+        #self.auxillary_nets = nn.ModuleList(auxillery_layers)
         self.auxillery_layers = nn.ModuleList(auxillery_layers)
+
             
     def parameters(self):
         if not args.backprop:
@@ -448,7 +452,7 @@ class VGGn(nn.Module):
         for x in cfg:
             if x == 'M':
                 layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
-                auxillery_layers += [nn.Identity()]
+                auxillery_layers += [nn.Identity(1)]
                 scale_cum *=2
             elif x == 'M3':
                 layers += [nn.MaxPool2d(kernel_size=3, stride=2, padding=1)]
@@ -478,13 +482,15 @@ class VGGn(nn.Module):
                                              num_classes=self.num_classes, 
                                              dim_out=input_dim//scale_cum, 
                                              first_layer=first_layer)]
+                    print(scale_cum, input_dim, self.num_classes, x)
                     auxillery_layers += [Auxillery("conv", input_dim//scale_cum, self.num_classes, x)]
                 else:
                     layers += [LocalLossBlockConv(input_ch, x, kernel_size=3, stride=1, padding=1, 
                                              num_classes=self.num_classes, 
                                              dim_out=input_dim//scale_cum, 
                                              first_layer=first_layer)]
-                    print(scale_cum)
+                    print(scale_cum, input_dim, self.num_classes, x)
+                    print(input_dim//scale_cum)
                     auxillery_layers += [Auxillery("conv", input_dim//scale_cum, self.num_classes, x)]
 
                 input_ch = x
