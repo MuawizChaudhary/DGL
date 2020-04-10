@@ -67,7 +67,7 @@ parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                     help='input batch size for testing (default: 1000)')
 parser.add_argument('--epochs', type=int, default=400, metavar='N',
                     help='number of epochs to train (default: 10)')
-parser.add_argument('--seed', type=int, default=1, metavar='S',
+parser.add_argument('--seed', type=int, default=25, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--type_aux', type=str, default='mlp',metavar='N')
 parser.add_argument('--block_size', type=int, default=1, help='block size')
@@ -117,7 +117,11 @@ def main():
 
 
     model = Net(aux_type=args.type_aux, block_size=args.block_size)
-    model = model.cuda()
+    args.cuda = not args.no_cuda and torch.cuda.is_available()
+
+    print(model)
+    if args.cuda:
+        model = model.cuda()
     wandb.watch(model)
     
     ncnn = len(model.main_cnn.blocks)
@@ -130,10 +134,12 @@ def main():
     for n in range(ncnn):
         to_train = itertools.chain(model.main_cnn.blocks[n].parameters(),
                                            model.auxillary_nets[n].parameters())
-        layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n], weight_decay=5e-4)
+        layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n])#, weight_decay=5e-4)
 
 ######################### Lets do the training
-    criterion = nn.CrossEntropyLoss().cuda()
+    criterion = nn.CrossEntropyLoss()
+    if args.cuda:
+        criterion.cuda()
     for epoch in range(1, args.epochs+1):
         # Make sure we set the bn right
         model.train()
@@ -156,8 +162,9 @@ def main():
             # measure data loading time
             data_time.update(time.time() - end)
 
-            targets = targets.cuda(non_blocking = True)
-            inputs = inputs.cuda(non_blocking = True)
+            if args.cuda:
+                targets = targets.cuda(non_blocking = True)
+                inputs = inputs.cuda(non_blocking = True)
             inputs = torch.autograd.Variable(inputs)
             targets = torch.autograd.Variable(targets)
 
@@ -201,8 +208,9 @@ def validate(val_loader, model, criterion, epoch, n):
     with torch.no_grad():
         total = 0
         for i, (input, target) in enumerate(val_loader):
-            target = target.cuda(non_blocking=True)
-            input = input.cuda(non_blocking=True)
+            if args.cuda:
+                target = target.cuda(non_blocking=True)
+                input = input.cuda(non_blocking=True)
             input = torch.autograd.Variable(input)
             target = torch.autograd.Variable(target)
 

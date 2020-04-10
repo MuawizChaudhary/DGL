@@ -33,18 +33,18 @@ class Net(nn.Module):
 
         self.dropout_p = dropout_p
         self.dropout_module = torch.nn.Dropout2d
-        self.relu = nn.ReLU()#nn.LeakyReLU(negative_slope=0.01)
+        relu = nn.ReLU()#nn.LeakyReLU(negative_slope=0.01)
 
         if downsample is None:
             downsample = [2, 4, 6]
 
-        self.blocks = nn.ModuleList([])
+        blocks = nn.ModuleList([])
         self.auxillary_nets = nn.ModuleList([])
         self.in_size = 32
 
-        self.blocks.append(nn.Sequential(
+        blocks.append(nn.Sequential(
             nn.Conv2d(3, feature_size, kernel_size=3, padding=1),
-            nn.BatchNorm2d(feature_size), self.relu, self.dropout_module(p=self.dropout_p, inplace=False)
+            nn.BatchNorm2d(feature_size), relu, self.dropout_module(p=self.dropout_p, inplace=False)
         ))
 
         self.auxillary_nets.append(
@@ -54,18 +54,18 @@ class Net(nn.Module):
         
         for i in range(depth-1):
             if i+1 in downsample:
-                self.blocks.append(nn.Sequential(
+                blocks.append(nn.Sequential(
                     nn.MaxPool2d((2,2)),
                     nn.Conv2d(feature_size, feature_size*2, kernel_size=3, padding=1),
-                    nn.BatchNorm2d(feature_size*2), self.relu,
+                    nn.BatchNorm2d(feature_size*2), relu,
                     self.dropout_module(p=self.dropout_p, inplace=False)
                 ))
                 self.in_size/=2
                 feature_size*=2
             else:
-                self.blocks.append(nn.Sequential(
+                blocks.append(nn.Sequential(
                     nn.Conv2d(feature_size, feature_size, kernel_size=3, padding=1),
-                    nn.BatchNorm2d(feature_size), self.relu, self.dropout_module(p=self.dropout_p, inplace=False)
+                    nn.BatchNorm2d(feature_size), relu, self.dropout_module(p=self.dropout_p, inplace=False)
                 ))
 
 
@@ -80,7 +80,7 @@ class Net(nn.Module):
                                           n_lin=nlin,mlp_layers=mlp_layers))
 
         if block_size>1:
-            len_layers = len(self.blocks)
+            len_layers = len(blocks)
             self.block_temp = nn.ModuleList([])
             self.aux_temp = nn.ModuleList([])
             for splits_id in range(depth//block_size):
@@ -88,13 +88,13 @@ class Net(nn.Module):
                 right_idx = (splits_id + 1) * block_size
                 if right_idx > len_layers:
                     right_idx = len_layers
-                self.block_temp.append(nn.Sequential(*self.blocks[left_idx:right_idx]))
+                self.block_temp.append(nn.Sequential(*blocks[left_idx:right_idx]))
                 self.aux_temp.append(self.auxillary_nets[right_idx-1])
          #   self.aux_temp[len(self.aux_temp)-1] = self.auxillary_nets[len(self.auxillary_nets)-1]
-            self.blocks = self.block_temp
+            blocks = self.block_temp
             self.auxillary_nets = self.aux_temp
 
-        self.main_cnn = rep(self.blocks)
+        self.main_cnn = rep(blocks)
         
     def forward(self, representation, n, upto=False):
         representation = self.main_cnn.forward(representation, n, upto=upto)
