@@ -1,4 +1,6 @@
 from __future__ import print_function
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = "1"
 import argparse
 import torch
 import torch.nn as nn
@@ -122,6 +124,7 @@ def main():
     ############### Initialize all
     layer_optim = [None] * ncnn
     layer_lr = [args.lr] * ncnn
+    overall_optim = optim.Adam(model.parameters(), lr=layer_lr[0])
     for n in range(ncnn):
         to_train = itertools.chain(model.main_cnn.blocks[n].parameters(),
                                            model.auxillary_nets[n].parameters())
@@ -181,6 +184,12 @@ def main():
                 prec1 = accuracy(outputs.data, targets)
                 losses[n].update(float(loss.item()), float(inputs.size(0)))
                 top1[n].update(float(prec1[0]), float(inputs.size(0)))
+
+            outputs, representation = model(inputs)
+            loss = criterion(outputs, targets)
+            loss.backward()
+            overall_optim.step()
+
         for n in range(ncnn):
             ##### evaluate on validation set
             top1test = validate(val_loader, model, criterion, epoch, n)
