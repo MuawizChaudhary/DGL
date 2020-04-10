@@ -15,7 +15,8 @@ from random import randint
 import datetime
 import itertools
 import time
-from models import auxillary_classifier2, Net
+from models import auxillary_classifier2, Net, VGGn
+from settings import parse_args
 from bisect import bisect_right
 import wandb
 
@@ -59,70 +60,60 @@ def lr_scheduler(lr_0, epoch):
     #lr = lr_0*0.2**(epoch // 15)
     return lr
 
-# Training settings
-parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-parser.add_argument('--batch-size', type=int, default=128, metavar='N',
-                    help='input batch size for training (default: 64)')
-parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
-                    help='input batch size for testing (default: 1000)')
-parser.add_argument('--epochs', type=int, default=400, metavar='N',
-                    help='number of epochs to train (default: 10)')
-parser.add_argument('--seed', type=int, default=25, metavar='S',
-                    help='random seed (default: 1)')
-parser.add_argument('--type_aux', type=str, default='mlp',metavar='N')
-parser.add_argument('--block_size', type=int, default=1, help='block size')
-parser.add_argument('--name', default='',type=str,help='name')
-parser.add_argument('--no-cuda', action='store_true', default=False,
-                    help='disables CUDA training')
-parser.add_argument('--lr', type=float, default=5e-4, help='block size')
-
-args = parser.parse_args()
-args.cuda = not args.no_cuda and torch.cuda.is_available()
-wandb.init(config=args)
-torch.manual_seed(args.seed)
-if args.cuda:
-    torch.cuda.manual_seed(args.seed)
-
-
-##################### Logs
-time_stamp = str(datetime.datetime.now().isoformat())
-name_log_txt = time_stamp + str(randint(0, 1000)) + args.name
-name_log_txt=name_log_txt +'.log'
-
-with open(name_log_txt, "a") as text_file:
-    print(args, file=text_file)
 
 def main():
     global args, best_prec1
-    args = parser.parse_args()
+    args = parse_args()
+    #wandb.init(config=args)
+    torch.manual_seed(args.seed)
+    
+    if args.cuda:
+        torch.cuda.manual_seed(args.seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    
+    ##################### Logs
+    time_stamp = str(datetime.datetime.now().isoformat())
+    name_log_txt = time_stamp + str(randint(0, 1000)) + args.name
+    name_log_txt= name_log_txt +'.log'
+
+    with open(name_log_txt, "a") as text_file:
+        print(args, file=text_file)
 
 
+    # we use a different normalization now, check inwith edourd to make sure
+    # this is fine
     transform_train = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-    ])
+                transforms.RandomCrop(32, padding=4),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize((0.424, 0.415, 0.384), (0.283, 0.278, 0.284))
+            ])
 
     transform_test = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        transforms.Normalize((0.424, 0.415, 0.384), (0.283, 0.278, 0.284)),
     ])
     
     trainset_class = CIFAR10(root='.', train=True, download=True, transform=transform_train)
-    train_loader = torch.utils.data.DataLoader(trainset_class, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    train_loader = torch.utils.data.DataLoader(trainset_class, sampler = None, 
+            batch_size=args.batch_size, shuffle=True, num_workers=4)
     testset = CIFAR10(root='.', train=False, download=True, transform=transform_test)
-    val_loader = torch.utils.data.DataLoader(testset, batch_size=1000, shuffle=False, num_workers=2)
+    val_loader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size,
+        shuffle=False, num_workers=4)
 
+    #model = Net(aux_type=args.type_aux, block_size=args.block_size)
+    input_dim = 10
+    input_ch = 3
+    num_classes = 10
+    model = VGGn("vgg8", input_dim, input_ch, num_classes)
 
-
-    model = Net(aux_type=args.type_aux, block_size=args.block_size)
     args.cuda = not args.no_cuda and torch.cuda.is_available()
 
     print(model)
     if args.cuda:
         model = model.cuda()
-    wandb.watch(model)
+    #wandb.watch(model)
     
     ncnn = len(model.main_cnn.blocks)
     n_cnn = len(model.main_cnn.blocks)
@@ -231,7 +222,7 @@ def validate(val_loader, model, criterion, epoch, n):
             total += input.size(0)
         print(' * Prec@1 {top1.avg:.3f}'
               .format(top1=top1))
-        wandb.log({"top1": top1.avg})
+        #wandb.log({"top1": top1.avg})
 
 
     return top1.avg
