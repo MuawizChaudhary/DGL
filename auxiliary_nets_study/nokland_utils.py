@@ -1,7 +1,7 @@
 import torch
 import os
 from torchvision import datasets, transforms
-from nokland_settings import parse_args
+from settings import parse_args
 
 args = parse_args()
 
