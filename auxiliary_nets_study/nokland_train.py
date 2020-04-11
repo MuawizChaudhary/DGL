@@ -144,9 +144,9 @@ def loss_calc(h, h_return, y, y_onehot, module, auxillery):
         y_hat_local = auxillery.decoder_y(h.view(h.size(0), -1))
         loss_sup = F.cross_entropy(y_hat_local,  y.detach())
         if not args.no_print_stats:
-            self.loss_pred += loss_sup.item() * h.size(0)
-            self.correct += y_hat_local.max(1)[1].eq(y).cpu().sum()
-            self.examples += h.size(0)
+            module.loss_pred += loss_sup.item() * h.size(0)
+            module.correct += y_hat_local.max(1)[1].eq(y).cpu().sum()
+            module.examples += h.size(0)
     elif args.loss_sup == 'predsim':                    
         h = auxillery.avg_pool(h)
         y_hat_local = auxillery.decoder_y(h.view(h.size(0), -1))
@@ -198,12 +198,13 @@ def test(epoch):
                 n = counter
                 module = model.features[n]
                 auxillery_layer = model.auxillery_layers[n]
-                optimizer  = optimizers[n]
+                #optimizer  = optimizers[n]
                 if isinstance(module, LocalLossBlockLinear) or isinstance(module, LocalLossBlockConv):
                     if counter == len(model.features) - 2 and isinstance(module, LocalLossBlockLinear):
                         h = h.view(h.size(0), -1)
                     h, h_return = module(h) 
-                    loss = loss_calc(h, h_return, y, y_onehot, module, auxillery_layer) 
+                    if not args.backprop:
+                       loss = loss_calc(h, h_return, y, y_onehot, module, auxillery_layer) 
                     h = h_return
                 elif isinstance(module, nn.MaxPool2d) or isinstance(module, nn.Linear) or isinstance(module, nn.Identity):
                     h = module(h)
@@ -355,7 +356,11 @@ for epoch in range(start_epoch, args.epochs + 1):#(0, 2):##(start_epoch, args.ep
             if epoch == 1:
                 f.write('{}\n\n'.format(args))
                 f.write('{}\n\n'.format(model))
-                f.write('{}\n\n'.format(optimizers[-1]))
+                if not args.backprop:
+                   f.write('{}\n\n'.format(optimizers[-1]))
+                else:
+                   f.write('{}\n\n'.format(optimizers))
+
                 f.write('Model {} has {} parameters influenced by global loss\n\n'.format(args.model, count_parameters(model)))
             f.write(train_print)
             f.write(test_print)
