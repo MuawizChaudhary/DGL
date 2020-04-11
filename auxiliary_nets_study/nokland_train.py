@@ -291,7 +291,7 @@ start_epoch = 1 if checkpoint is None else 1 + checkpoint['epoch']
 #start_epoch = 3
 print(args.epochs, start_epoch)
 #args.epochs = 1
-for epoch in range(start_epoch, args.epochs + 1):#(0, 2):#(start_epoch, args.epochs + 1):#range(0, 1):#
+for epoch in range(start_epoch, args.epochs + 1):#(0, 2):##(start_epoch, args.epochs + 1):#range(0, 1):#
     # Decide learning rate
     lr = args.lr * args.lr_decay_fact ** bisect_right(args.lr_decay_milestones, (epoch-1))
     save_state_dict = False
@@ -310,7 +310,7 @@ for epoch in range(start_epoch, args.epochs + 1):#(0, 2):#(start_epoch, args.epo
     
     # Train and test    
     print(epoch, lr)
-    #train(epoch, lr)
+ #   train(epoch, lr)
     train_loss,train_error,train_print = train(epoch, lr)
 
     #return
