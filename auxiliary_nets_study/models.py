@@ -17,6 +17,8 @@ class rep(nn.Module):
         if upto:
             for i in range(n+1):
                 x = self.forward(x,i,upto=False)
+                if type(x) == tuple:
+                   x = x[1]
             return x
         out = self.blocks[n](x)
         return out

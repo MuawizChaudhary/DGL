@@ -18,7 +18,7 @@ import itertools
 from nokland_utils import count_parameters, to_one_hot, dataset_load, allclose_test, similarity_matrix
 from settings import parse_args
 from models import LocalLossBlockLinear, LocalLossBlockConv, Net, VGGn
-   
+import wandb   
     
 def train(epoch, lr):
     ''' Train model on train set'''
@@ -210,7 +210,9 @@ def test(epoch):
     if args.loss_sup == 'predsim' and not args.backprop:
         loss_average *= (1 - args.beta)
     error_percent = 100 - 100.0 * float(correct) / len(test_loader.dataset)
+
     string_print = 'Test loss_global={:.4f}, error={:.3f}%\n'.format(loss_average, error_percent)
+    wandb.log({"Test Loss Global": loss_average, "Error": error_percent})
     if not args.no_print_stats:
         for m in model.modules():
             if isinstance(m, LocalLossBlockLinear) or isinstance(m, LocalLossBlockConv):
@@ -221,6 +223,7 @@ def test(epoch):
     
    
 args = parse_args()
+wandb.init(config=args, project='dgl-refactored')
 
 if args.cuda:
     cudnn.enabled = True
@@ -265,7 +268,7 @@ if checkpoint is not None:
     
 if args.cuda:
     model.cuda()
-
+wandb.watch(model)
 if args.progress_bar:
     from tqdm import tqdm
     
