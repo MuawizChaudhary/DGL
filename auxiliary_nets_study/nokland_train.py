@@ -53,15 +53,19 @@ def train(epoch, lr):
             n = counter
             module = model.features[n]
             auxillery_layer = model.auxillery_layers[n]
-            optimizer  = optimizers[n]
+            if not args.backprop:
+                optimizer  = optimizers[n]
             if isinstance(module, LocalLossBlockLinear) or isinstance(module, LocalLossBlockConv): 
                 if counter == len(model.features) - 2 and isinstance(module, LocalLossBlockLinear):
                     h = h.view(h.size(0), -1)
                 h, h_return = module(h)
-                loss = loss_calc(h, h_return, y, y_onehot, module, auxillery_layer)
-                h = backward_optimize(module, loss, h_return, optimizer)
-                loss = loss.item()
-                loss_total += loss
+                if not args.backprop:
+                    loss = loss_calc(h, h_return, y, y_onehot, module, auxillery_layer)
+                    h = backward_optimize(module, loss, h_return, optimizer)
+                    loss = loss.item()
+                    loss_total += loss
+                else:
+                    h = h_return
             elif isinstance(module, nn.MaxPool2d) or isinstance(module, nn.Linear) or isinstance(module, nn.Identity):
                 h = module(h)
            
@@ -84,10 +88,13 @@ def train(epoch, lr):
         # Backward pass and optimizer step
         # For local loss functions, this will only affect output layer
         loss.backward()
-        classifier_optim = optimizers[-1]
+        if not args.backprop:
+            classifier_optim = optimizers[-1]
+        else: 
+            classifier_optim = optimizers
+        
         classifier_optim.step()
         classifier_optim.zero_grad()
-        
         pred = output.max(1)[1] # get the index of the max log-probability
         correct += pred.eq(target_).cpu().sum()
         
@@ -271,20 +278,22 @@ if args.cuda:
 wandb.watch(model)
 if args.progress_bar:
     from tqdm import tqdm
-    
-optimizers = len(model.features)*[None]
-for counter in range(len(model.features)):
-    module = model.features[counter]
-    auxillery_layer = model.auxillery_layers[counter]
-    # temp, make sure to do it for any part that has parameters
-    if isinstance(module, LocalLossBlockLinear) or isinstance(module, LocalLossBlockConv) or isinstance(module, nn.Linear): 
-        to_train = itertools.chain(module.parameters(), auxillery_layer.parameters())
-        if args.optim == 'sgd':
-            optimizers[counter] = optim.SGD(to_train, lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
-        elif args.optim == 'adam' or args.optim == 'amsgrad':
-            optimizers[counter] = optim.Adam(to_train, lr=args.lr, weight_decay=args.weight_decay, amsgrad=args.optim == 'amsgrad')
-        else:
-            print('Unknown optimizer')
+if not args.backprop:
+    optimizers = len(model.features)*[None]
+    for counter in range(len(model.features)):
+        module = model.features[counter]
+        auxillery_layer = model.auxillery_layers[counter]
+        # temp, make sure to do it for any part that has parameters
+        if isinstance(module, LocalLossBlockLinear) or isinstance(module, LocalLossBlockConv) or isinstance(module, nn.Linear): 
+            to_train = itertools.chain(module.parameters(), auxillery_layer.parameters())
+            if args.optim == 'sgd':
+                optimizers[counter] = optim.SGD(to_train, lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
+            elif args.optim == 'adam' or args.optim == 'amsgrad':
+                optimizers[counter] = optim.Adam(to_train, lr=args.lr, weight_decay=args.weight_decay, amsgrad=args.optim == 'amsgrad')
+            else:
+                print('Unknown optimizer')
+else:
+    optimizers = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, amsgrad=args.optim == 'amsgrad')
     
 print(model)
 print('Model {} has {} parameters influenced by global loss'.format(args.model, count_parameters(model)))
@@ -294,7 +303,7 @@ start_epoch = 1 if checkpoint is None else 1 + checkpoint['epoch']
 #start_epoch = 3
 print(args.epochs, start_epoch)
 #args.epochs = 1
-for epoch in range(start_epoch, args.epochs + 1):#(0, 2):##(start_epoch, args.epochs + 1):#range(0, 1):#
+for epoch in range(0,2):#(start_epoch, args.epochs + 1):#(0, 2):##(start_epoch, args.epochs + 1):#range(0, 1):#
     # Decide learning rate
     lr = args.lr * args.lr_decay_fact ** bisect_right(args.lr_decay_milestones, (epoch-1))
     save_state_dict = False
@@ -306,68 +315,72 @@ for epoch in range(start_epoch, args.epochs + 1):#(0, 2):##(start_epoch, args.ep
             save_state_dict = True
 
     # Set learning rate
-    for counter, module in enumerate(model.features):
-        if optimizers[counter] is not None:
-            for param_group in optimizers[counter].param_groups:
-                param_group['lr'] = lr
+    if not args.backprop:
+        for counter, module in enumerate(model.features):
+            if optimizers[counter] is not None:
+                for param_group in optimizers[counter].param_groups:
+                    param_group['lr'] = lr
+    else:
+        for param_group in optimizers.param_groups:
+            param_group['lr'] = lr
     
     # Train and test    
     print(epoch, lr)
- #   train(epoch, lr)
-    train_loss,train_error,train_print = train(epoch, lr)
-
-    #return
-    test_loss,test_error,test_print = test(epoch)
-
-    # Check if to save checkpoint
-    if args.save_dir is not '':
-        # Resolve log folder and checkpoint file name
-        filename = 'chkp_ep{}_lr{:.2e}_trainloss{:.2f}_testloss{:.2f}_trainerr{:.2f}_testerr{:.2f}.tar'.format(
-                epoch, lr, train_loss, test_loss, train_error, test_error)
-        dirname = os.path.join(args.save_dir, args.dataset)
-        dirname = os.path.join(dirname, '{}_mult{:.1f}'.format(args.model, args.feat_mult))
-        dirname = os.path.join(dirname, '{}_{}x{}_{}_dimdec{}_beta{}_bs{}_drop{}_{}_wd{}_bp{}_lr{:.2e}'.format(
-                args.nonlin, args.num_layers, args.num_hidden, args.loss_sup + args.loss_sup,  args.dim_in_decoder, args.beta, args.batch_size, args.dropout, args.optim, args.weight_decay, int(args.backprop), args.lr))
-        
-        # Create log directory
-        if not os.path.exists(dirname):
-            os.makedirs(dirname)
-        elif epoch==1 and os.path.exists(dirname):
-            # Delete old files
-            for f in os.listdir(dirname):
-                os.remove(os.path.join(dirname, f))
-        
-        # Add log entry to log file
-        with open(os.path.join(dirname, 'log.txt'), 'a') as f:
-            if epoch == 1:
-                f.write('{}\n\n'.format(args))
-                f.write('{}\n\n'.format(model))
-                f.write('{}\n\n'.format(optimizers[-1]))
-                f.write('Model {} has {} parameters influenced by global loss\n\n'.format(args.model, count_parameters(model)))
-            f.write(train_print)
-            f.write(test_print)
-            f.write('\n')
-            f.close()
-        
-        # Save checkpoint for every epoch
-        torch.save({
-            'epoch': epoch,
-            'args': args,
-            'state_dict': model.state_dict() if (save_state_dict or epoch==args.epochs) else None,
-            'train_loss': train_error,
-            'train_error': train_error,
-            'test_loss': test_loss,
-            'test_error': test_error,
-        }, os.path.join(dirname, filename))  
-    
-        # Save checkpoint for last epoch with state_dict (for resuming)
-        torch.save({
-            'epoch': epoch,
-            'args': args,
-            'state_dict': model.state_dict(),
-            'train_loss': train_error,
-            'train_error': train_error,
-            'test_loss': test_loss,
-            'test_error': test_error,
-        }, os.path.join(dirname, 'chkp_last_epoch.tar')) 
+    train(epoch, lr)
+#    train_loss,train_error,train_print = train(epoch, lr)
+#
+#    #return
+#    test_loss,test_error,test_print = test(epoch)
+#
+#    # Check if to save checkpoint
+#    if args.save_dir is not '':
+#        # Resolve log folder and checkpoint file name
+#        filename = 'chkp_ep{}_lr{:.2e}_trainloss{:.2f}_testloss{:.2f}_trainerr{:.2f}_testerr{:.2f}.tar'.format(
+#                epoch, lr, train_loss, test_loss, train_error, test_error)
+#        dirname = os.path.join(args.save_dir, args.dataset)
+#        dirname = os.path.join(dirname, '{}_mult{:.1f}'.format(args.model, args.feat_mult))
+#        dirname = os.path.join(dirname, '{}_{}x{}_{}_dimdec{}_beta{}_bs{}_drop{}_{}_wd{}_bp{}_lr{:.2e}'.format(
+#                args.nonlin, args.num_layers, args.num_hidden, args.loss_sup + args.loss_sup,  args.dim_in_decoder, args.beta, args.batch_size, args.dropout, args.optim, args.weight_decay, int(args.backprop), args.lr))
+#        
+#        # Create log directory
+#        if not os.path.exists(dirname):
+#            os.makedirs(dirname)
+#        elif epoch==1 and os.path.exists(dirname):
+#            # Delete old files
+#            for f in os.listdir(dirname):
+#                os.remove(os.path.join(dirname, f))
+#        
+#        # Add log entry to log file
+#        with open(os.path.join(dirname, 'log.txt'), 'a') as f:
+#            if epoch == 1:
+#                f.write('{}\n\n'.format(args))
+#                f.write('{}\n\n'.format(model))
+#                f.write('{}\n\n'.format(optimizers[-1]))
+#                f.write('Model {} has {} parameters influenced by global loss\n\n'.format(args.model, count_parameters(model)))
+#            f.write(train_print)
+#            f.write(test_print)
+#            f.write('\n')
+#            f.close()
+#        
+#        # Save checkpoint for every epoch
+#        torch.save({
+#            'epoch': epoch,
+#            'args': args,
+#            'state_dict': model.state_dict() if (save_state_dict or epoch==args.epochs) else None,
+#            'train_loss': train_error,
+#            'train_error': train_error,
+#            'test_loss': test_loss,
+#            'test_error': test_error,
+#        }, os.path.join(dirname, filename))  
+#    
+#        # Save checkpoint for last epoch with state_dict (for resuming)
+#        torch.save({
+#            'epoch': epoch,
+#            'args': args,
+#            'state_dict': model.state_dict(),
+#            'train_loss': train_error,
+#            'train_error': train_error,
+#            'test_loss': test_loss,
+#            'test_error': test_error,
+#        }, os.path.join(dirname, 'chkp_last_epoch.tar')) 
    
