@@ -17,11 +17,13 @@ class rep(nn.Module):
         if upto:
             for i in range(n+1):
                 x = self.forward(x,i,upto=False)
+                if type(x) == tuple:
+                   x = x[1]
             return x
         out = self.blocks[n](x)
         return out
       
-class Net(nn.Module):
+class DGL_Net(nn.Module):
     def __init__(self, depth=8, num_classes=10, aux_type='mlp', block_size=1,
                  feature_size=128, downsample=None, dropout_p=0.2):#put it back to .2
         super(Net, self).__init__()
@@ -417,43 +419,41 @@ class Auxillery(nn.Module):
                 self.sim_loss = nn.Linear(num_out, num_out, bias=False)
 
 
-#class Net(nn.Module):
-#    '''
-#    A fully connected network.
-#    The network can be trained by backprop or by locally generated error signal based on cross-entropy and/or similarity matching loss.
-#    
-#    Args:
-#        num_layers (int): Number of hidden layers.
-#        num_hidden (int): Number of units in each hidden layer.
-#        input_dim (int): Feature map height/width for input.
-#        input_ch (int): Number of feature maps for input.
-#        num_classes (int): Number of classes (used in local prediction loss).
-#    '''
-#    Net(args.num_layers, args.num_hidden, output_dim, int(output_ch * feat_mult), num_classes)
-
-#    def __init__(self, num_layers, num_hidden, input_dim, input_ch, num_classes):
-#        super(Net, self).__init__()
-#        
-#        self.num_hidden = num_hidden
-#        self.num_layers = num_layers
-#        reduce_factor = 1
-#        self.layers = nn.ModuleList([LocalLossBlockLinear(input_dim*input_dim*input_ch, num_hidden, num_classes, first_layer=True)])
-#        self.auxillery_layers = nn.ModuleList([Auxillery("linear", num_hidden, num_classes, num_hidden)]) 
-#        self.layers.extend([LocalLossBlockLinear(int(num_hidden // (reduce_factor**(i-1))), int(num_hidden // (reduce_factor**i)), num_classes) for i in range(1, num_layers)])
-#        self.auxillery_layers.extend([Auxillery("linear", int(num_hidden // (reduce_factor**i)), num_classes, int(num_hidden // (reduce_factor**i))) for i in range(1, num_layers)])
-#        
-#        layer_out = nn.Linear(int(num_hidden //(reduce_factor**(num_layers-1))), num_classes)
-#        if not args.backprop:
-#            layer_out.weight.data.zero_()
-#        
-#        self.layers.extend([layer_out])
-#        self.auxillery_layers.extend([nn.Identity(1)])
-#            
-#    def parameters(self):
-#        if not args.backprop:
-#            return self.layer_out.parameters()
-#        else:
-#            return super(Net, self).parameters()
+class Net(nn.Module):
+    '''
+    A fully connected network.
+    The network can be trained by backprop or by locally generated error signal based on cross-entropy and/or similarity matching loss.
+    
+    Args:
+        num_layers (int): Number of hidden layers.
+        num_hidden (int): Number of units in each hidden layer.
+        input_dim (int): Feature map height/width for input.
+        input_ch (int): Number of feature maps for input.
+        num_classes (int): Number of classes (used in local prediction loss).
+    '''
+    def __init__(self, num_layers, num_hidden, input_dim, input_ch, num_classes):
+        super(Net, self).__init__()
+        
+        self.num_hidden = num_hidden
+        self.num_layers = num_layers
+        reduce_factor = 1
+        self.layers = nn.ModuleList([LocalLossBlockLinear(input_dim*input_dim*input_ch, num_hidden, num_classes, first_layer=True)])
+        self.auxillery_layers = nn.ModuleList([Auxillery("linear", num_hidden, num_classes, num_hidden)]) 
+        self.layers.extend([LocalLossBlockLinear(int(num_hidden // (reduce_factor**(i-1))), int(num_hidden // (reduce_factor**i)), num_classes) for i in range(1, num_layers)])
+        self.auxillery_layers.extend([Auxillery("linear", int(num_hidden // (reduce_factor**i)), num_classes, int(num_hidden // (reduce_factor**i))) for i in range(1, num_layers)])
+        
+        layer_out = nn.Linear(int(num_hidden //(reduce_factor**(num_layers-1))), num_classes)
+        if not args.backprop:
+            layer_out.weight.data.zero_()
+        
+        self.layers.extend([layer_out])
+        self.auxillery_layers.extend([nn.Identity(1)])
+            
+    def parameters(self):
+        if not args.backprop:
+            return self.layer_out.parameters()
+        else:
+            return super(Net, self).parameters()
 #    
            
 cfg = {

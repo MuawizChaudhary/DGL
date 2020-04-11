@@ -15,7 +15,7 @@ from random import randint
 import datetime
 import itertools
 import time
-from models import auxillary_classifier2, Net
+from models import auxillary_classifier2, DGL_Net
 from bisect import bisect_right
 import wandb
 
@@ -78,7 +78,7 @@ parser.add_argument('--lr', type=float, default=5e-4, help='block size')
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
-#wandb.init(config=args)
+wandb.init(config=args, project="dgl-refactored")
 torch.manual_seed(args.seed)
 if args.cuda:
     torch.cuda.manual_seed(args.seed)
@@ -116,13 +116,13 @@ def main():
 
 
 
-    model = Net(aux_type=args.type_aux, block_size=args.block_size)
+    model = DGL_Net(aux_type=args.type_aux, block_size=args.block_size)
     args.cuda = not args.no_cuda and torch.cuda.is_available()
 
     print(model)
     if args.cuda:
         model = model.cuda()
-    #wandb.watch(model)
+    wandb.watch(model)
     
     ncnn = len(model.main_cnn.blocks)
     n_cnn = len(model.main_cnn.blocks)
@@ -242,7 +242,7 @@ def validate(val_loader, model, criterion, epoch, n):
             total += input.size(0)
         print(' * Prec@1 {top1.avg:.3f}'
               .format(top1=top1))
-        #wandb.log({"top1": top1.avg})
+        wandb.log({"top1": top1.avg})
 
 
     return top1.avg
