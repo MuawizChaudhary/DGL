@@ -15,7 +15,7 @@ from random import randint
 import datetime
 import itertools
 import time
-from models import auxillary_classifier2, DGL_Net
+from models import auxillary_classifier2, DGL_Net, VGGn
 from bisect import bisect_right
 import wandb
 
@@ -116,7 +116,8 @@ def main():
 
 
 
-    model = DGL_Net(aux_type=args.type_aux, block_size=args.block_size)
+    model = VGGn('vgg8b', 32, 3, 10, 1)
+    #DGL_Net(aux_type=args.type_aux, block_size=args.block_size)
     args.cuda = not args.no_cuda and torch.cuda.is_available()
 
     print(model)
