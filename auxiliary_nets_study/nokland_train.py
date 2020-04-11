@@ -16,7 +16,7 @@ import math
 import os
 import itertools
 from nokland_utils import count_parameters, to_one_hot, dataset_load, allclose_test, similarity_matrix
-from nokland_settings import parse_args
+from settings import parse_args
 from models import LocalLossBlockLinear, LocalLossBlockConv, Net, VGGn
    
     
@@ -196,7 +196,7 @@ def test(epoch):
                     if counter == len(model.features) - 2 and isinstance(module, LocalLossBlockLinear):
                         h = h.view(h.size(0), -1)
                     h, h_return = module(h) 
-                    loss = loss_calc(h, h_return, y, y_onehot, module) 
+                    loss = loss_calc(h, h_return, y, y_onehot, module, auxillery_layer) 
                     h = h_return
                 elif isinstance(module, nn.MaxPool2d) or isinstance(module, nn.Linear) or isinstance(module, nn.Identity):
                     h = module(h)
@@ -339,7 +339,7 @@ for epoch in range(start_epoch, args.epochs + 1):#(0, 2):#(start_epoch, args.epo
             if epoch == 1:
                 f.write('{}\n\n'.format(args))
                 f.write('{}\n\n'.format(model))
-                f.write('{}\n\n'.format(optimizers[-1][-1]))
+                f.write('{}\n\n'.format(optimizers[-1]))
                 f.write('Model {} has {} parameters influenced by global loss\n\n'.format(args.model, count_parameters(model)))
             f.write(train_print)
             f.write(test_print)
