@@ -23,7 +23,7 @@ class rep(nn.Module):
       
 class Net(nn.Module):
     def __init__(self, depth=8, num_classes=10, aux_type='mlp', block_size=1,
-                 feature_size=128, downsample=None, dropout_p=0.2):
+                 feature_size=128, downsample=None, dropout_p=0.2):#put it back to .2
         super(Net, self).__init__()
         print(aux_type)
         if aux_type == 'mlp':
@@ -35,6 +35,7 @@ class Net(nn.Module):
 
         self.dropout_p = dropout_p
         self.dropout_module = torch.nn.Dropout2d
+        self.num_classes = num_classes
         relu = nn.ReLU()#nn.LeakyReLU(negative_slope=0.01)
 
         if downsample is None:
@@ -95,13 +96,74 @@ class Net(nn.Module):
          #   self.aux_temp[len(self.aux_temp)-1] = self.auxillary_nets[len(self.auxillary_nets)-1]
             blocks = self.block_temp
             self.auxillary_nets = self.aux_temp
-
+        blocks, auxillary_nets = self._make_layers(cfg['vgg8b'], 3, feature_size, 1)
+        print(len(blocks))
+        self.auxillary_nets = auxillary_nets
         self.main_cnn = rep(blocks)
         
     def forward(self, representation, n, upto=False):
         representation = self.main_cnn.forward(representation, n, upto=upto)
+        if isinstance(representation, tuple):
+            representation = representation[1]
         outputs = self.auxillary_nets[n](representation)
         return outputs, representation
+
+    def _make_layers(self, cfg, input_ch, input_dim, feat_mult):
+        layers = []
+        auxillery_layers = []
+        first_layer = True
+        scale_cum = 1
+        for x in cfg:
+            if x == 'M':
+                layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+                auxillery_layers += [nn.Identity(1)]
+                scale_cum *=2
+            elif x == 'M3':
+                layers += [nn.MaxPool2d(kernel_size=3, stride=2, padding=1)]
+                auxillery_layers += [nn.Identity()]
+                scale_cum *=2
+            elif x == 'M4':
+                layers += [nn.MaxPool2d(kernel_size=4, stride=4)]
+                auxillery_layers += [nn.Identity()]
+                scale_cum *=4
+            elif x == 'A':
+                layers += [nn.AvgPool2d(kernel_size=2, stride=2)]
+                auxillery_layers += [nn.Identity()]
+                scale_cum *=2
+            elif x == 'A3':
+                layers += [nn.AvgPool2d(kernel_size=3, stride=2, padding=1)]
+                auxillery_layers += [nn.Identity()]
+                scale_cum *=2
+            elif x == 'A4':
+                layers += [nn.AvgPool2d(kernel_size=4, stride=4)]
+                auxillery_layers += [nn.Identity()]
+                scale_cum *=4
+            else:
+                x = int(x * feat_mult)
+                if first_layer and input_dim > 64:
+                    scale_cum = 2
+                    layers += [LocalLossBlockConv(input_ch, x, kernel_size=7, stride=2, padding=3, 
+                                             num_classes=self.num_classes, 
+                                             dim_out=input_dim//scale_cum, 
+                                             first_layer=first_layer, dropout=self.dropout_p)]
+                    auxillery_layers += [auxillary_classifier2(x)]
+
+                else:
+                    layers += [LocalLossBlockConv(input_ch, x, kernel_size=3, stride=1, padding=1, 
+                                             num_classes=self.num_classes, 
+                                             dim_out=input_dim//scale_cum, 
+                                             first_layer=first_layer, dropout=self.dropout_p)]
+                    auxillery_layers += [auxillary_classifier2(x)]
+
+                input_ch = x
+                first_layer = False
+        output_dim=input_dim//scale_cum
+        layers += [LocalLossBlockConv(input_ch, 1024, kernel_size=3, stride=1, padding=1, 
+                                             num_classes=self.num_classes, 
+                                             dim_out=input_dim//scale_cum, 
+                                             first_layer=first_layer, dropout=self.dropout_p)]
+        auxillery_layers += [auxillary_classifier2(1024)]
+        return nn.ModuleList(layers), nn.ModuleList(auxillery_layers)
 
 
 class auxillary_classifier2(nn.Module):
@@ -114,10 +176,10 @@ class auxillary_classifier2(nn.Module):
         feature_size = input_features
         self.blocks = []
         #TODO make argument
-        self.dropout_p = 0.2
-        self.dropout = torch.nn.Dropout2d(p=self.dropout_p, inplace=False)
+        #self.dropout_p = 0.2
+        #self.dropout = torch.nn.Dropout2d(p=self.dropout_p, inplace=False)
 
-
+        
         for n in range(self.n_lin):
             if n==0:
                 input_features = input_features
@@ -135,6 +197,8 @@ class auxillary_classifier2(nn.Module):
             self.blocks.append(nn.Sequential(conv,bn_temp))
 
         self.blocks = nn.ModuleList(self.blocks)
+        #self.relu = nn.ReLU()
+        self.adaptive_avg_pool = nn.AdaptiveAvgPool2d((2,2))
         self.bn = nn.BatchNorm2d(feature_size)
 
         if mlp_layers > 0:
@@ -164,17 +228,21 @@ class auxillary_classifier2(nn.Module):
 
 
     def forward(self, x):
+        if type(x) is tuple:
+            x = x[1]
         out = x
         if not self.cnn:
             #First reduce the size by 16
             out = F.adaptive_avg_pool2d(out,(math.ceil(self.in_size/4),math.ceil(self.in_size/4)))
 
+
         for n in range(self.n_lin):
             out = self.blocks[n](out)
-            out = F.relu(out)
+            #out = self.relu(out)
             #out = self.dropout(out)
 
-        out = F.adaptive_avg_pool2d(out, (2,2))
+        out = self.adaptive_avg_pool(out)
+
         if not self.mlp:
             out = self.bn(out)
         out = out.view(out.size(0), -1)
@@ -349,42 +417,44 @@ class Auxillery(nn.Module):
                 self.sim_loss = nn.Linear(num_out, num_out, bias=False)
 
 
-class Net(nn.Module):
-    '''
-    A fully connected network.
-    The network can be trained by backprop or by locally generated error signal based on cross-entropy and/or similarity matching loss.
-    
-    Args:
-        num_layers (int): Number of hidden layers.
-        num_hidden (int): Number of units in each hidden layer.
-        input_dim (int): Feature map height/width for input.
-        input_ch (int): Number of feature maps for input.
-        num_classes (int): Number of classes (used in local prediction loss).
-    '''
-    def __init__(self, num_layers, num_hidden, input_dim, input_ch, num_classes):
-        super(Net, self).__init__()
-        
-        self.num_hidden = num_hidden
-        self.num_layers = num_layers
-        reduce_factor = 1
-        self.layers = nn.ModuleList([LocalLossBlockLinear(input_dim*input_dim*input_ch, num_hidden, num_classes, first_layer=True)])
-        self.auxillery_layers = nn.ModuleList([Auxillery("linear", num_hidden, num_classes, num_hidden)]) 
-        self.layers.extend([LocalLossBlockLinear(int(num_hidden // (reduce_factor**(i-1))), int(num_hidden // (reduce_factor**i)), num_classes) for i in range(1, num_layers)])
-        self.auxillery_layers.extend([Auxillery("linear", int(num_hidden // (reduce_factor**i)), num_classes, int(num_hidden // (reduce_factor**i))) for i in range(1, num_layers)])
-        
-        layer_out = nn.Linear(int(num_hidden //(reduce_factor**(num_layers-1))), num_classes)
-        if not args.backprop:
-            layer_out.weight.data.zero_()
-        
-        self.layers.extend([layer_out])
-        self.auxillery_layers.extend([nn.Identity(1)])
-            
-    def parameters(self):
-        if not args.backprop:
-            return self.layer_out.parameters()
-        else:
-            return super(Net, self).parameters()
-    
+#class Net(nn.Module):
+#    '''
+#    A fully connected network.
+#    The network can be trained by backprop or by locally generated error signal based on cross-entropy and/or similarity matching loss.
+#    
+#    Args:
+#        num_layers (int): Number of hidden layers.
+#        num_hidden (int): Number of units in each hidden layer.
+#        input_dim (int): Feature map height/width for input.
+#        input_ch (int): Number of feature maps for input.
+#        num_classes (int): Number of classes (used in local prediction loss).
+#    '''
+#    Net(args.num_layers, args.num_hidden, output_dim, int(output_ch * feat_mult), num_classes)
+
+#    def __init__(self, num_layers, num_hidden, input_dim, input_ch, num_classes):
+#        super(Net, self).__init__()
+#        
+#        self.num_hidden = num_hidden
+#        self.num_layers = num_layers
+#        reduce_factor = 1
+#        self.layers = nn.ModuleList([LocalLossBlockLinear(input_dim*input_dim*input_ch, num_hidden, num_classes, first_layer=True)])
+#        self.auxillery_layers = nn.ModuleList([Auxillery("linear", num_hidden, num_classes, num_hidden)]) 
+#        self.layers.extend([LocalLossBlockLinear(int(num_hidden // (reduce_factor**(i-1))), int(num_hidden // (reduce_factor**i)), num_classes) for i in range(1, num_layers)])
+#        self.auxillery_layers.extend([Auxillery("linear", int(num_hidden // (reduce_factor**i)), num_classes, int(num_hidden // (reduce_factor**i))) for i in range(1, num_layers)])
+#        
+#        layer_out = nn.Linear(int(num_hidden //(reduce_factor**(num_layers-1))), num_classes)
+#        if not args.backprop:
+#            layer_out.weight.data.zero_()
+#        
+#        self.layers.extend([layer_out])
+#        self.auxillery_layers.extend([nn.Identity(1)])
+#            
+#    def parameters(self):
+#        if not args.backprop:
+#            return self.layer_out.parameters()
+#        else:
+#            return super(Net, self).parameters()
+#    
            
 cfg = {
     'vgg6a':  [128, 'M', 256, 'M', 512, 'M', 512],

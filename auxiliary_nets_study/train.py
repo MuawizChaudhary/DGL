@@ -1,6 +1,4 @@
 from __future__ import print_function
-import os
-os.environ['CUDA_VISIBLE_DEVICES'] = "1"
 import argparse
 import torch
 import torch.nn as nn
@@ -17,8 +15,7 @@ from random import randint
 import datetime
 import itertools
 import time
-from models import auxillary_classifier2, Net, VGGn
-from settings import parse_args
+from models import auxillary_classifier2, Net
 from bisect import bisect_right
 import wandb
 
@@ -62,54 +59,64 @@ def lr_scheduler(lr_0, epoch):
     #lr = lr_0*0.2**(epoch // 15)
     return lr
 
+# Training settings
+parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
+parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+                    help='input batch size for training (default: 64)')
+parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
+                    help='input batch size for testing (default: 1000)')
+parser.add_argument('--epochs', type=int, default=400, metavar='N',
+                    help='number of epochs to train (default: 10)')
+parser.add_argument('--seed', type=int, default=25, metavar='S',
+                    help='random seed (default: 1)')
+parser.add_argument('--type_aux', type=str, default='mlp',metavar='N')
+parser.add_argument('--block_size', type=int, default=1, help='block size')
+parser.add_argument('--name', default='',type=str,help='name')
+parser.add_argument('--no-cuda', action='store_true', default=False,
+                    help='disables CUDA training')
+parser.add_argument('--lr', type=float, default=5e-4, help='block size')
+
+args = parser.parse_args()
+args.cuda = not args.no_cuda and torch.cuda.is_available()
+#wandb.init(config=args)
+torch.manual_seed(args.seed)
+if args.cuda:
+    torch.cuda.manual_seed(args.seed)
+
+
+##################### Logs
+time_stamp = str(datetime.datetime.now().isoformat())
+name_log_txt = time_stamp + str(randint(0, 1000)) + args.name
+name_log_txt=name_log_txt +'.log'
+
+with open(name_log_txt, "a") as text_file:
+    print(args, file=text_file)
 
 def main():
     global args, best_prec1
-    args = parse_args()
-    #wandb.init(config=args)
-    torch.manual_seed(args.seed)
-    
-    if args.cuda:
-        torch.cuda.manual_seed(args.seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-    
-    ##################### Logs
-    time_stamp = str(datetime.datetime.now().isoformat())
-    name_log_txt = time_stamp + str(randint(0, 1000)) + args.name
-    name_log_txt= name_log_txt +'.log'
-
-    with open(name_log_txt, "a") as text_file:
-        print(args, file=text_file)
+    args = parser.parse_args()
 
 
-    # we use a different normalization now, check inwith edourd to make sure
-    # this is fine
     transform_train = transforms.Compose([
-                transforms.RandomCrop(32, padding=4),
-                transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-                transforms.Normalize((0.424, 0.415, 0.384), (0.283, 0.278, 0.284))
-            ])
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
 
     transform_test = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize((0.424, 0.415, 0.384), (0.283, 0.278, 0.284)),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ])
     
     trainset_class = CIFAR10(root='.', train=True, download=True, transform=transform_train)
-    train_loader = torch.utils.data.DataLoader(trainset_class, sampler = None, 
-            batch_size=args.batch_size, shuffle=True, num_workers=4)
+    train_loader = torch.utils.data.DataLoader(trainset_class, batch_size=args.batch_size, shuffle=True, num_workers=4)
     testset = CIFAR10(root='.', train=False, download=True, transform=transform_test)
-    val_loader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size,
-        shuffle=False, num_workers=4)
+    val_loader = torch.utils.data.DataLoader(testset, batch_size=1000, shuffle=False, num_workers=2)
 
-    #model = Net(aux_type=args.type_aux, block_size=args.block_size)
-    input_dim = 10
-    input_ch = 3
-    num_classes = 10
-    model = VGGn("vgg8", input_dim, input_ch, num_classes)
 
+
+    model = Net(aux_type=args.type_aux, block_size=args.block_size)
     args.cuda = not args.no_cuda and torch.cuda.is_available()
 
     print(model)
@@ -124,11 +131,14 @@ def main():
     ############### Initialize all
     layer_optim = [None] * ncnn
     layer_lr = [args.lr] * ncnn
-    overall_optim = optim.Adam(model.parameters(), lr=layer_lr[0])
+    #print(len(list(model.main_cnn.blocks[0].parameters())), len(list(model.auxillary_nets[0].parameters())))
     for n in range(ncnn):
-        to_train = itertools.chain(model.main_cnn.blocks[n].parameters(),
-                                           model.auxillary_nets[n].parameters())
-        layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n])#, weight_decay=5e-4)
+        to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
+        if len(list(to_train)) != 0:
+            to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
+            layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n])#, weight_decay=5e-4)
+        else:
+            layer_optim[n] = None
 
 ######################### Lets do the training
     criterion = nn.CrossEntropyLoss()
@@ -148,8 +158,10 @@ def main():
 
         for n in range(ncnn):
             layer_lr[n] = lr_scheduler(args.lr, epoch-1)
-            for param_group in layer_optim[n].param_groups:
-                param_group['lr'] = layer_lr[n]
+            optimizer = layer_optim[n]
+            if optimizer is not None: 
+                for param_group in optimizer.param_groups:
+                    param_group['lr'] = layer_lr[n]
         end = time.time()
 
         for i, (inputs, targets) in enumerate(train_loader):
@@ -169,33 +181,32 @@ def main():
             for n in range(ncnn):
                 end = time.time()
                 # Forward
-                layer_optim[n].zero_grad()
+                if layer_optim[n] is not None:
+                    layer_optim[n].zero_grad()
+
                 outputs, representation = model(representation, n=n)
 
-                loss = criterion(outputs, targets)
-                loss.backward()
-                layer_optim[n].step()
+                if layer_optim[n] is not None:
+                    loss = criterion(outputs, targets)
+                    loss.backward()
+                    layer_optim[n].step()
 
                 representation = representation.detach()
                 # measure accuracy and record loss
                 # measure elapsed time
                 batch_time[n].update(time.time() - end)
+                if layer_optim[n] is not None:
 
-                prec1 = accuracy(outputs.data, targets)
-                losses[n].update(float(loss.item()), float(inputs.size(0)))
-                top1[n].update(float(prec1[0]), float(inputs.size(0)))
-
-            outputs, representation = model(inputs)
-            loss = criterion(outputs, targets)
-            loss.backward()
-            overall_optim.step()
-
+                    prec1 = accuracy(outputs.data, targets)
+                    losses[n].update(float(loss.item()), float(inputs.size(0)))
+                    top1[n].update(float(prec1[0]), float(inputs.size(0)))
         for n in range(ncnn):
             ##### evaluate on validation set
-            top1test = validate(val_loader, model, criterion, epoch, n)
-            with open(name_log_txt, "a") as text_file:
-                print("n: {}, epoch {}, loss: {:.5f}, train top1:{} test top1:{} "
-                      .format(n+1, epoch, losses[n].avg, top1[n].avg,top1test), file=text_file)
+            if layer_optim[n] is not None:
+                top1test = validate(val_loader, model, criterion, epoch, n)
+                with open(name_log_txt, "a") as text_file:
+                    print("n: {}, epoch {}, loss: {:.5f}, train top1:{} test top1:{} "
+                          .format(n+1, epoch, losses[n].avg, top1[n].avg,top1test), file=text_file)
 
 def validate(val_loader, model, criterion, epoch, n):
     batch_time = AverageMeter()
