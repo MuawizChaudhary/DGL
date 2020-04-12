@@ -60,24 +60,6 @@ def lr_scheduler(lr_0, epoch):
     #lr = lr_0*0.2**(epoch // 15)
     return lr
 
-## Training settings
-#parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-#parser.add_argument('--batch-size', type=int, default=128, metavar='N',
-#                    help='input batch size for training (default: 64)')
-#parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
-#                    help='input batch size for testing (default: 1000)')
-#parser.add_argument('--epochs', type=int, default=400, metavar='N',
-#                    help='number of epochs to train (default: 10)')
-#parser.add_argument('--seed', type=int, default=25, metavar='S',
-#                    help='random seed (default: 1)')
-#parser.add_argument('--type_aux', type=str, default='mlp',metavar='N')
-#parser.add_argument('--block_size', type=int, default=1, help='block size')
-#parser.add_argument('--name', default='',type=str,help='name')
-#parser.add_argument('--no-cuda', action='store_true', default=False,
-#                    help='disables CUDA training')
-#parser.add_argument('--lr', type=float, default=5e-4, help='block size')
-#
-#args = parser.parse_args()
 
 ##################### Logs
 def main():
@@ -104,12 +86,12 @@ def main():
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        transforms.Normalize((0.424, 0.415, 0.384), (0.283, 0.278, 0.284)),
     ])
 
     transform_test = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        transforms.Normalize((0.424, 0.415, 0.384), (0.283, 0.278, 0.284)),
     ])
     
     trainset_class = CIFAR10(root='.', train=True, download=True, transform=transform_train)

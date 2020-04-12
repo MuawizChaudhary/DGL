@@ -49,25 +49,21 @@ def train(epoch, lr):
         loss_total = 0
 
         h, y, y_onehot =  data, target, target_onehot
-        for counter in range(len(model.features)):
+        for counter in range(len(model.main_cnn.blocks)):
             n = counter
-            module = model.features[n]
-            auxillery_layer = model.auxillery_layers[n]
-            if not args.backprop:
-                optimizer  = optimizers[n]
-            if isinstance(module, LocalLossBlockLinear) or isinstance(module, LocalLossBlockConv): 
-                if counter == len(model.features) - 2 and isinstance(module, LocalLossBlockLinear):
-                    h = h.view(h.size(0), -1)
-                h, h_return = module(h)
-                if not args.backprop:
-                    loss = loss_calc(h, h_return, y, y_onehot, module, auxillery_layer)
-                    h = backward_optimize(module, loss, h_return, optimizer)
-                    loss = loss.item()
-                    loss_total += loss
-                else:
-                    h = h_return
-            elif isinstance(module, nn.MaxPool2d) or isinstance(module, nn.Linear) or isinstance(module, nn.Identity):
-                h = module(h)
+            module =  model.main_cnn.blocks[n]
+            auxillery_layer = model.auxillary_nets[n]
+            optimizer  = optimizers[n]
+            
+            if optimizer is not None and not args.backprop:
+                optimizer.zero_grad()
+            outputs, h = model(h, n=n)
+
+            if optimizer is not None and not args.backprop and not isinstance(module, nn.Linear):
+                loss = loss_calc(h, outputs, y, y_onehot, module, auxillery_layer)
+                h = backward_optimize(module, loss, h, optimizer)
+                loss_total += loss.item()
+
            
         output = h
      
@@ -76,14 +72,14 @@ def train(epoch, lr):
         if args.loss_sup == 'predsim' and not args.backprop:
             loss *= (1 - args.beta) 
         loss_total_global += loss.item() * data.size(0)
-        #if batch_idx <5:
-        #    allclose_test(output[0], epoch, batch_idx)
-        #    print(output[0])
-        #    print()
-        #else:
-        #    return
-        #if batch_idx == 4:
-        #    return
+        if batch_idx <5:
+            allclose_test(output[0], epoch, batch_idx)
+            print(output[0])
+            print()
+        else:
+            return
+        if batch_idx == 4:
+            return
 
         # Backward pass and optimizer step
         # For local loss functions, this will only affect output layer
@@ -127,38 +123,31 @@ def train(epoch, lr):
     return loss_average_local+loss_average_global, error_percent, string_print
 
 
-def loss_calc(h, h_return, y, y_onehot, module, auxillery):
-    if args.loss_sup == 'sim' or args.loss_sup == 'predsim':
-        h_loss = auxillery.sim_loss(h)
-        Rh = similarity_matrix(h_loss)
-       
+def loss_calc(h, outputs, y, y_onehot, module, auxillery):
     # Calculate supervised loss
     if args.loss_sup == 'sim':
         Ry = similarity_matrix(y_onehot).detach()
-        loss_sup = F.mse_loss(Rh, Ry)
+        loss_sup = F.mse_loss(outputs, Ry)
         if not args.no_print_stats:
-            self.loss_sim += loss_sup.item() * h.size(0)
-            self.examples += h.size(0)
+            module.loss_sim += loss_sup.item() * y.size(0)
+            module.examples += y.size(0)
     elif args.loss_sup == 'pred':
-        h = auxillery.avg_pool(h)
-        y_hat_local = auxillery.decoder_y(h.view(h.size(0), -1))
-        loss_sup = F.cross_entropy(y_hat_local,  y.detach())
-        if not args.no_print_stats:
-            module.loss_pred += loss_sup.item() * h.size(0)
-            module.correct += y_hat_local.max(1)[1].eq(y).cpu().sum()
-            module.examples += h.size(0)
+        loss_sup = F.cross_entropy(outputs,  y.detach())
+        if not args.no_print_stats and not isinstance(module, nn.Linear):
+            module.loss_pred += loss_sup.item() * y.size(0)
+            module.correct += outputs.max(1)[1].eq(y).cpu().sum()
+            module.examples += y.size(0)
     elif args.loss_sup == 'predsim':                    
-        h = auxillery.avg_pool(h)
-        y_hat_local = auxillery.decoder_y(h.view(h.size(0), -1))
+        Rh, y_hat_local = outputs
         Ry = similarity_matrix(y_onehot).detach()
         loss_pred = (1-args.beta) * F.cross_entropy(y_hat_local,  y.detach())
         loss_sim = args.beta * F.mse_loss(Rh, Ry)
         loss_sup = loss_pred + loss_sim
-        if not args.no_print_stats:
-            module.loss_pred += loss_pred.item() * h.size(0)
-            module.loss_sim += loss_sim.item() * h.size(0)
+        if not args.no_print_stats and not isinstance(module, nn.Linear):
+            module.loss_pred += loss_pred.item() * y.size(0)
+            module.loss_sim += loss_sim.item() * y.size(0)
             module.correct += y_hat_local.max(1)[1].eq(y).cpu().sum()
-            module.examples += h.size(0)
+            module.examples += y.size(0)
     return loss_sup
 
 
@@ -191,25 +180,13 @@ def test(epoch):
         target_onehot = to_one_hot(target, num_classes)
         if args.cuda:
             target_onehot = target_onehot.cuda()
-        
         h, y, y_onehot =  data, target, target_onehot
-        with torch.no_grad():
-            for counter in range(len(model.features)):
-                n = counter
-                module = model.features[n]
-                auxillery_layer = model.auxillery_layers[n]
-                #optimizer  = optimizers[n]
-                if isinstance(module, LocalLossBlockLinear) or isinstance(module, LocalLossBlockConv):
-                    if counter == len(model.features) - 2 and isinstance(module, LocalLossBlockLinear):
-                        h = h.view(h.size(0), -1)
-                    h, h_return = module(h) 
-                    if not args.backprop:
-                       loss = loss_calc(h, h_return, y, y_onehot, module, auxillery_layer) 
-                    h = h_return
-                elif isinstance(module, nn.MaxPool2d) or isinstance(module, nn.Linear) or isinstance(module, nn.Identity):
-                    h = module(h)
-            output = h
-            test_loss += F.cross_entropy(output, target).item() * data.size(0)
+        #for counter in range(len(model.main_cnn.blocks)):
+        #    n = counter
+        outputs, h = model(h, n=(len(model.main_cnn.blocks)-1), upto=True)
+   
+  
+        test_loss += F.cross_entropy(output, target).item() * data.size(0)
         pred = output.max(1)[1] # get the index of the max log-probability
         correct += pred.eq(target_).cpu().sum()
     
@@ -280,10 +257,10 @@ wandb.watch(model)
 if args.progress_bar:
     from tqdm import tqdm
 if not args.backprop:
-    optimizers = len(model.features)*[None]
-    for counter in range(len(model.features)):
-        module = model.features[counter]
-        auxillery_layer = model.auxillery_layers[counter]
+    optimizers = len(model.main_cnn.blocks)*[None]
+    for counter in range(len(model.main_cnn.blocks)):
+        module = model.main_cnn.blocks[counter]
+        auxillery_layer = model.auxillary_nets[counter]
         # temp, make sure to do it for any part that has parameters
         if isinstance(module, LocalLossBlockLinear) or isinstance(module, LocalLossBlockConv) or isinstance(module, nn.Linear): 
             to_train = itertools.chain(module.parameters(), auxillery_layer.parameters())
@@ -304,7 +281,7 @@ start_epoch = 1 if checkpoint is None else 1 + checkpoint['epoch']
 #start_epoch = 3
 print(args.epochs, start_epoch)
 #args.epochs = 1
-for epoch in range(start_epoch, args.epochs + 1):#(0, 2):##(start_epoch, args.epochs + 1):#range(0, 1):#
+for epoch in range(0, 2): #(start_epoch, args.epochs + 1):#(0, 2):##(start_epoch, args.epochs + 1):#range(0, 1):#
     # Decide learning rate
     lr = args.lr * args.lr_decay_fact ** bisect_right(args.lr_decay_milestones, (epoch-1))
     save_state_dict = False
@@ -317,7 +294,7 @@ for epoch in range(start_epoch, args.epochs + 1):#(0, 2):##(start_epoch, args.ep
 
     # Set learning rate
     if not args.backprop:
-        for counter, module in enumerate(model.features):
+        for counter, module in enumerate(model.main_cnn.blocks):
             if optimizers[counter] is not None:
                 for param_group in optimizers[counter].param_groups:
                     param_group['lr'] = lr
@@ -327,65 +304,65 @@ for epoch in range(start_epoch, args.epochs + 1):#(0, 2):##(start_epoch, args.ep
     
     # Train and test    
     print(epoch, lr)
-#    train(epoch, lr)
-    train_loss,train_error,train_print = train(epoch, lr)
-
-    #return
-    test_loss,test_error,test_print = test(epoch)
-
-    # Check if to save checkpoint
-    if args.save_dir is not '':
-        # Resolve log folder and checkpoint file name
-        filename = 'chkp_ep{}_lr{:.2e}_trainloss{:.2f}_testloss{:.2f}_trainerr{:.2f}_testerr{:.2f}.tar'.format(
-                epoch, lr, train_loss, test_loss, train_error, test_error)
-        dirname = os.path.join(args.save_dir, args.dataset)
-        dirname = os.path.join(dirname, '{}_mult{:.1f}'.format(args.model, args.feat_mult))
-        dirname = os.path.join(dirname, '{}_{}x{}_{}_dimdec{}_beta{}_bs{}_drop{}_{}_wd{}_bp{}_lr{:.2e}'.format(
-                args.nonlin, args.num_layers, args.num_hidden, args.loss_sup + args.loss_sup,  args.dim_in_decoder, args.beta, args.batch_size, args.dropout, args.optim, args.weight_decay, int(args.backprop), args.lr))
-        
-        # Create log directory
-        if not os.path.exists(dirname):
-            os.makedirs(dirname)
-        elif epoch==1 and os.path.exists(dirname):
-            # Delete old files
-            for f in os.listdir(dirname):
-                os.remove(os.path.join(dirname, f))
-        
-        # Add log entry to log file
-        with open(os.path.join(dirname, 'log.txt'), 'a') as f:
-            if epoch == 1:
-                f.write('{}\n\n'.format(args))
-                f.write('{}\n\n'.format(model))
-                if not args.backprop:
-                   f.write('{}\n\n'.format(optimizers[-1]))
-                else:
-                   f.write('{}\n\n'.format(optimizers))
-
-                f.write('Model {} has {} parameters influenced by global loss\n\n'.format(args.model, count_parameters(model)))
-            f.write(train_print)
-            f.write(test_print)
-            f.write('\n')
-            f.close()
-        
-        # Save checkpoint for every epoch
-        torch.save({
-            'epoch': epoch,
-            'args': args,
-            'state_dict': model.state_dict() if (save_state_dict or epoch==args.epochs) else None,
-            'train_loss': train_error,
-            'train_error': train_error,
-            'test_loss': test_loss,
-            'test_error': test_error,
-        }, os.path.join(dirname, filename))  
-    
-        # Save checkpoint for last epoch with state_dict (for resuming)
-        torch.save({
-            'epoch': epoch,
-            'args': args,
-            'state_dict': model.state_dict(),
-            'train_loss': train_error,
-            'train_error': train_error,
-            'test_loss': test_loss,
-            'test_error': test_error,
-        }, os.path.join(dirname, 'chkp_last_epoch.tar')) 
+    train(epoch, lr)
+#    train_loss,train_error,train_print = train(epoch, lr)
+#
+#    #return
+#    test_loss,test_error,test_print = test(epoch)
+#
+#    # Check if to save checkpoint
+#    if args.save_dir is not '':
+#        # Resolve log folder and checkpoint file name
+#        filename = 'chkp_ep{}_lr{:.2e}_trainloss{:.2f}_testloss{:.2f}_trainerr{:.2f}_testerr{:.2f}.tar'.format(
+#                epoch, lr, train_loss, test_loss, train_error, test_error)
+#        dirname = os.path.join(args.save_dir, args.dataset)
+#        dirname = os.path.join(dirname, '{}_mult{:.1f}'.format(args.model, args.feat_mult))
+#        dirname = os.path.join(dirname, '{}_{}x{}_{}_dimdec{}_beta{}_bs{}_drop{}_{}_wd{}_bp{}_lr{:.2e}'.format(
+#                args.nonlin, args.num_layers, args.num_hidden, args.loss_sup + args.loss_sup,  args.dim_in_decoder, args.beta, args.batch_size, args.dropout, args.optim, args.weight_decay, int(args.backprop), args.lr))
+#        
+#        # Create log directory
+#        if not os.path.exists(dirname):
+#            os.makedirs(dirname)
+#        elif epoch==1 and os.path.exists(dirname):
+#            # Delete old files
+#            for f in os.listdir(dirname):
+#                os.remove(os.path.join(dirname, f))
+#        
+#        # Add log entry to log file
+#        with open(os.path.join(dirname, 'log.txt'), 'a') as f:
+#            if epoch == 1:
+#                f.write('{}\n\n'.format(args))
+#                f.write('{}\n\n'.format(model))
+#                if not args.backprop:
+#                   f.write('{}\n\n'.format(optimizers[-1]))
+#                else:
+#                   f.write('{}\n\n'.format(optimizers))
+#
+#                f.write('Model {} has {} parameters influenced by global loss\n\n'.format(args.model, count_parameters(model)))
+#            f.write(train_print)
+#            f.write(test_print)
+#            f.write('\n')
+#            f.close()
+#        
+#        # Save checkpoint for every epoch
+#        torch.save({
+#            'epoch': epoch,
+#            'args': args,
+#            'state_dict': model.state_dict() if (save_state_dict or epoch==args.epochs) else None,
+#            'train_loss': train_error,
+#            'train_error': train_error,
+#            'test_loss': test_loss,
+#            'test_error': test_error,
+#        }, os.path.join(dirname, filename))  
+#    
+#        # Save checkpoint for last epoch with state_dict (for resuming)
+#        torch.save({
+#            'epoch': epoch,
+#            'args': args,
+#            'state_dict': model.state_dict(),
+#            'train_loss': train_error,
+#            'train_error': train_error,
+#            'test_loss': test_loss,
+#            'test_error': test_error,
+#        }, os.path.join(dirname, 'chkp_last_epoch.tar')) 
    

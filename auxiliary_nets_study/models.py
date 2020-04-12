@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.nn import init
 import math
 from settings import parse_args
-
+from nokland_utils import similarity_matrix
 args = parse_args()
 
 class rep(nn.Module):
@@ -16,170 +16,107 @@ class rep(nn.Module):
         # if upto = False we forward just through layer n
         if upto:
             for i in range(n+1):
-                if (len(self.blocks) - 2) == i:
-                    x = x.view(x.size(0), -1)
-
-                x = self.forward(x,i,upto=False)
-                if type(x) == tuple:
-                   x = x[1]
-            return x
+                if (len(self.blocks) - 2) == i and isinstance(self.blocks[n], LocalLossBlockLinear):
+                    x, x_return = x.view(x.size(0), -1)
+                if isinstance(self.blocks[n], nn.MaxPool2d) or isinstance(self.blocks[n], nn.Linear):
+                    out = self.blocks[n](x)
+                    return out, out
+                x, x_return = self.forward(x,i,upto=False)
+            return x, x_return
         
-        #if (len(self.blocks) - 1) == n:
-         #   print(n)
         if isinstance(self.blocks[n], LocalLossBlockLinear):
            x = x.view(x.size(0), -1)
-        out = self.blocks[n](x)
-        return out
+        if isinstance(self.blocks[n], nn.MaxPool2d) or isinstance(self.blocks[n], nn.Linear):
+            out = self.blocks[n](x)
+            return out, out
+        out, out_return = self.blocks[n](x)
+        return out, out_return
       
 class DGL_Net(nn.Module):
     def __init__(self, depth=8, num_classes=10, aux_type='mlp', block_size=1,
                  feature_size=128, downsample=None, dropout_p=0.2):#put it back to .2
         super(DGL_Net, self).__init__()
-        #print(aux_type)
-        #if aux_type == 'mlp':
-        #    nlin=0; mlp_layers=0; cnn=False
-        #elif aux_type == 'mlp-sr':
-        #    nlin=3; mlp_layers=3; cnn=False
-        #elif aux_type == 'cnn':
-        #    nlin=2; mlp_layers=0; cnn = True
+        print(aux_type)
+        if aux_type == 'mlp':
+            nlin=0; mlp_layers=0; cnn=False
+        elif aux_type == 'mlp-sr':
+            nlin=3; mlp_layers=3; cnn=False
+        elif aux_type == 'cnn':
+            nlin=2; mlp_layers=0; cnn = True
 
         self.dropout_p = dropout_p
-        #self.dropout_module = torch.nn.Dropout2d
+        self.dropout_module = torch.nn.Dropout2d
         self.num_classes = num_classes
-        #relu = nn.ReLU()#nn.LeakyReLU(negative_slope=0.01)
+        relu = nn.ReLU()#nn.LeakyReLU(negative_slope=0.01)
 
-        #if downsample is None:
-        #    downsample = [2, 4, 6]
+        if downsample is None:
+            downsample = [2, 4, 6]
 
-        #blocks = nn.ModuleList([])
-        #self.auxillary_nets = nn.ModuleList([])
+        blocks = nn.ModuleList([])
+        self.auxillary_nets = nn.ModuleList([])
         self.in_size = 32
 
-        #blocks.append(nn.Sequential(
-        #    nn.Conv2d(3, feature_size, kernel_size=3, padding=1),
-        #    nn.BatchNorm2d(feature_size), relu, self.dropout_module(p=self.dropout_p, inplace=False)
-        #))
+        blocks.append(nn.Sequential(
+            nn.Conv2d(3, feature_size, kernel_size=3, padding=1),
+            nn.BatchNorm2d(feature_size), relu, self.dropout_module(p=self.dropout_p, inplace=False)
+        ))
 
-        #self.auxillary_nets.append(
-        #    auxillary_classifier2(input_features=feature_size, cnn = cnn,
-        #                          in_size=self.in_size, num_classes=num_classes,
-        #                          n_lin=nlin, mlp_layers=mlp_layers))
-        #
-        #for i in range(depth-1):
-        #    if i+1 in downsample:
-        #        blocks.append(nn.Sequential(
-        #            nn.MaxPool2d((2,2)),
-        #            nn.Conv2d(feature_size, feature_size*2, kernel_size=3, padding=1),
-        #            nn.BatchNorm2d(feature_size*2), relu,
-        #            self.dropout_module(p=self.dropout_p, inplace=False)
-        #        ))
-        #        self.in_size/=2
-        #        feature_size*=2
-        #    else:
-        #        blocks.append(nn.Sequential(
-        #            nn.Conv2d(feature_size, feature_size, kernel_size=3, padding=1),
-        #            nn.BatchNorm2d(feature_size), relu, self.dropout_module(p=self.dropout_p, inplace=False)
-        #        ))
+        self.auxillary_nets.append(
+            auxillary_classifier2(input_features=feature_size, cnn = cnn,
+                                  in_size=self.in_size, num_classes=num_classes,
+                                  n_lin=nlin, mlp_layers=mlp_layers))
+        
+        for i in range(depth-1):
+            if i+1 in downsample:
+                blocks.append(nn.Sequential(
+                    nn.MaxPool2d((2,2)),
+                    nn.Conv2d(feature_size, feature_size*2, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(feature_size*2), relu,
+                    self.dropout_module(p=self.dropout_p, inplace=False)
+                ))
+                self.in_size/=2
+                feature_size*=2
+            else:
+                blocks.append(nn.Sequential(
+                    nn.Conv2d(feature_size, feature_size, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(feature_size), relu, self.dropout_module(p=self.dropout_p, inplace=False)
+                ))
 
 
-        #    if i < depth-2:
-        #        self.auxillary_nets.append(
-        #            auxillary_classifier2(input_features=feature_size, cnn = cnn,
-        #                                  in_size=self.in_size, num_classes=num_classes,
-        #                                  n_lin=nlin,mlp_layers=mlp_layers))
+            if i < depth-2:
+                self.auxillary_nets.append(
+                    auxillary_classifier2(input_features=feature_size, cnn = cnn,
+                                          in_size=self.in_size, num_classes=num_classes,
+                                          n_lin=nlin,mlp_layers=mlp_layers))
 
-        #self.auxillary_nets.append(auxillary_classifier2(input_features=feature_size,
-        #                                  in_size=self.in_size, num_classes=num_classes,
-        #                                  n_lin=nlin,mlp_layers=mlp_layers))
+        self.auxillary_nets.append(auxillary_classifier2(input_features=feature_size,
+                                          in_size=self.in_size, num_classes=num_classes,
+                                          n_lin=nlin,mlp_layers=mlp_layers))
 
-        #if block_size>1:
-        #    len_layers = len(blocks)
-        #    self.block_temp = nn.ModuleList([])
-        #    self.aux_temp = nn.ModuleList([])
-        #    for splits_id in range(depth//block_size):
-        #        left_idx = splits_id * block_size
-        #        right_idx = (splits_id + 1) * block_size
-        #        if right_idx > len_layers:
-        #            right_idx = len_layers
-        #        self.block_temp.append(nn.Sequential(*blocks[left_idx:right_idx]))
-        #        self.aux_temp.append(self.auxillary_nets[right_idx-1])
-        # #   self.aux_temp[len(self.aux_temp)-1] = self.auxillary_nets[len(self.auxillary_nets)-1]
-        #    blocks = self.block_temp
-        #    self.auxillary_nets = self.aux_temp
+        if block_size>1:
+            len_layers = len(blocks)
+            self.block_temp = nn.ModuleList([])
+            self.aux_temp = nn.ModuleList([])
+            for splits_id in range(depth//block_size):
+                left_idx = splits_id * block_size
+                right_idx = (splits_id + 1) * block_size
+                if right_idx > len_layers:
+                    right_idx = len_layers
+                self.block_temp.append(nn.Sequential(*blocks[left_idx:right_idx]))
+                self.aux_temp.append(self.auxillary_nets[right_idx-1])
+         #   self.aux_temp[len(self.aux_temp)-1] = self.auxillary_nets[len(self.auxillary_nets)-1]
+            blocks = self.block_temp
+            self.auxillary_nets = self.aux_temp
         blocks, auxillary_nets = self._make_layers(cfg['vgg8b'], 3, 32, 1)
         self.auxillary_nets = auxillary_nets
         self.main_cnn = rep(blocks)
         
     def forward(self, representation, n, upto=False):
         representation = self.main_cnn.forward(representation, n, upto=upto)
-        if isinstance(representation, tuple):
-            representation = representation[1]
         outputs = self.auxillary_nets[n](representation)
         return outputs, representation
 
-    def _make_layers(self, cfg, input_ch, input_dim, feat_mult):
-        layers = []
-        auxillery_layers = []
-        first_layer = True
-        scale_cum = 1
-        for x in cfg:
-            if x == 'M':
-                layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
-                auxillery_layers += [nn.Identity(1)]
-                scale_cum *=2
-            elif x == 'M3':
-                layers += [nn.MaxPool2d(kernel_size=3, stride=2, padding=1)]
-                auxillery_layers += [nn.Identity()]
-                scale_cum *=2
-            elif x == 'M4':
-                layers += [nn.MaxPool2d(kernel_size=4, stride=4)]
-                auxillery_layers += [nn.Identity()]
-                scale_cum *=4
-            elif x == 'A':
-                layers += [nn.AvgPool2d(kernel_size=2, stride=2)]
-                auxillery_layers += [nn.Identity()]
-                scale_cum *=2
-            elif x == 'A3':
-                layers += [nn.AvgPool2d(kernel_size=3, stride=2, padding=1)]
-                auxillery_layers += [nn.Identity()]
-                scale_cum *=2
-            elif x == 'A4':
-                layers += [nn.AvgPool2d(kernel_size=4, stride=4)]
-                auxillery_layers += [nn.Identity()]
-                scale_cum *=4
-            else:
-                x = int(x * feat_mult)
-                if first_layer and input_dim > 64:
-                    scale_cum = 2
-                    layers += [LocalLossBlockConv(input_ch, x, kernel_size=7, stride=2, padding=3, 
-                                             num_classes=self.num_classes, 
-                                             dim_out=input_dim//scale_cum, 
-                                             first_layer=first_layer, dropout=self.dropout_p)]
-                    auxillery_layers += [Auxillery("conv", input_dim//scale_cum, self.num_classes, x)]
-
-                else:
-                    layers += [LocalLossBlockConv(input_ch, x, kernel_size=3, stride=1, padding=1, 
-                                             num_classes=self.num_classes, 
-                                             dim_out=input_dim//scale_cum, 
-                                             first_layer=first_layer, dropout=self.dropout_p)]
-                    auxillery_layers += [Auxillery("conv", input_dim//scale_cum, self.num_classes, x)]
-
-
-                input_ch = x
-                first_layer = False
-        output_dim=input_dim//scale_cum
-        classifier = Net(1, args.num_hidden, output_dim, int(1024 * feat_mult),
-                self.num_classes)
-        layers.extend([*classifier.layers])
-        auxillery_layers.extend([*classifier.auxillery_layers])
-        #layers += [LocalLossBlockConv(input_ch, 1024, kernel_size=3, stride=1, padding=1, 
-        #                                     num_classes=self.num_classes, 
-        #                                     dim_out=input_dim//scale_cum, 
-        #                                     first_layer=first_layer, dropout=self.dropout_p)]
-        #auxillery_layers += [auxillary_classifier2(1024)]
-        return nn.ModuleList(layers), nn.ModuleList(auxillery_layers)
-
-
+    
 class auxillary_classifier2(nn.Module):
     def __init__(self, input_features=256, in_size=32, cnn = False,
                  num_classes=10, n_lin=0, mlp_layers=0):
@@ -429,9 +366,21 @@ class Auxillery(nn.Module):
                 self.sim_loss = nn.Linear(num_out, num_out, bias=False)
 
     def forward(self, x):
-        x = self.avg_pool(x)
-        x = self.decoder_y(x.view(x.size(0), -1))
-        return x
+        if args.loss_sup == 'sim':
+            x_loss = self.sim_loss(x)
+            Rx = similarity_matrix(x_loss)
+            return Rx
+        elif args.loss_sup == 'pred':
+            x = self.avg_pool(x)
+            x = self.decoder_y(x.view(x.size(0), -1))
+            return x
+        elif args.loss_sup == 'predsim':
+            x_loss = self.sim_loss(x)
+            Rx = similarity_matrix(x_loss)
+            x = self.avg_pool(x)
+            x = self.decoder_y(x.view(x.size(0), -1))
+            return(Rx, x)
+
 
 
 class Net(nn.Module):
@@ -518,22 +467,18 @@ class VGGn(nn.Module):
             auxillery_layers.append(nn.Identity(1))
 
         self.main_cnn = rep(nn.ModuleList(features))
-        #self.features = nn.ModuleList(features)
-        #self.auxillary_nets = nn.ModuleList(auxillery_layers)
         self.auxillary_nets = nn.ModuleList(auxillery_layers)
             
     def parameters(self):
         if not args.backprop:
-            return self.features[len(self.features) - 1].parameters()
+            return self.main_cnn.blocks[len(self.main_cnn.blocks) - 1].parameters()
         else:
             return super(VGGn, self).parameters()
     
     def forward(self, representation, n, upto=False):
-        representation = self.main_cnn.forward(representation, n, upto=upto)
-        if isinstance(representation, tuple):
-            representation = representation[1]
-        outputs = self.auxillary_nets[n](representation)
-        return outputs, representation
+        rep, rep_return = self.main_cnn.forward(representation, n, upto=upto)
+        outputs = self.auxillary_nets[n](rep)
+        return outputs, rep_return
 
     def _make_layers(self, cfg, input_ch, input_dim, feat_mult):
         layers = []
