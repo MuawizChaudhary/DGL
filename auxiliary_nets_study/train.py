@@ -16,6 +16,7 @@ import datetime
 import itertools
 import time
 from models import auxillary_classifier2, DGL_Net, VGGn
+from settings import parse_args
 from bisect import bisect_right
 import wandb
 
@@ -59,43 +60,45 @@ def lr_scheduler(lr_0, epoch):
     #lr = lr_0*0.2**(epoch // 15)
     return lr
 
-# Training settings
-parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-parser.add_argument('--batch-size', type=int, default=128, metavar='N',
-                    help='input batch size for training (default: 64)')
-parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
-                    help='input batch size for testing (default: 1000)')
-parser.add_argument('--epochs', type=int, default=400, metavar='N',
-                    help='number of epochs to train (default: 10)')
-parser.add_argument('--seed', type=int, default=25, metavar='S',
-                    help='random seed (default: 1)')
-parser.add_argument('--type_aux', type=str, default='mlp',metavar='N')
-parser.add_argument('--block_size', type=int, default=1, help='block size')
-parser.add_argument('--name', default='',type=str,help='name')
-parser.add_argument('--no-cuda', action='store_true', default=False,
-                    help='disables CUDA training')
-parser.add_argument('--lr', type=float, default=5e-4, help='block size')
-
-args = parser.parse_args()
-args.cuda = not args.no_cuda and torch.cuda.is_available()
-wandb.init(config=args, project="dgl-refactored")
-torch.manual_seed(args.seed)
-if args.cuda:
-    torch.cuda.manual_seed(args.seed)
-
+## Training settings
+#parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
+#parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+#                    help='input batch size for training (default: 64)')
+#parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
+#                    help='input batch size for testing (default: 1000)')
+#parser.add_argument('--epochs', type=int, default=400, metavar='N',
+#                    help='number of epochs to train (default: 10)')
+#parser.add_argument('--seed', type=int, default=25, metavar='S',
+#                    help='random seed (default: 1)')
+#parser.add_argument('--type_aux', type=str, default='mlp',metavar='N')
+#parser.add_argument('--block_size', type=int, default=1, help='block size')
+#parser.add_argument('--name', default='',type=str,help='name')
+#parser.add_argument('--no-cuda', action='store_true', default=False,
+#                    help='disables CUDA training')
+#parser.add_argument('--lr', type=float, default=5e-4, help='block size')
+#
+#args = parser.parse_args()
 
 ##################### Logs
-time_stamp = str(datetime.datetime.now().isoformat())
-name_log_txt = time_stamp + str(randint(0, 1000)) + args.name
-name_log_txt=name_log_txt +'.log'
-
-with open(name_log_txt, "a") as text_file:
-    print(args, file=text_file)
-
 def main():
     global args, best_prec1
-    args = parser.parse_args()
-
+    args = parse_args()
+    args.cuda = not args.no_cuda and torch.cuda.is_available()
+    wandb.init(config=args, project="dgl-refactored")
+    torch.manual_seed(args.seed)
+    if args.cuda:
+        torch.cuda.manual_seed(args.seed)
+    if args.cuda:
+        cudnn.enabled = True
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    time_stamp = str(datetime.datetime.now().isoformat())
+    name_log_txt = time_stamp + str(randint(0, 1000)) + args.name
+    name_log_txt=name_log_txt +'.log'
+    
+    with open(name_log_txt, "a") as text_file:
+        print(args, file=text_file)
+    
 
     transform_train = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
@@ -112,7 +115,7 @@ def main():
     trainset_class = CIFAR10(root='.', train=True, download=True, transform=transform_train)
     train_loader = torch.utils.data.DataLoader(trainset_class, batch_size=args.batch_size, shuffle=True, num_workers=4)
     testset = CIFAR10(root='.', train=False, download=True, transform=transform_test)
-    val_loader = torch.utils.data.DataLoader(testset, batch_size=1000, shuffle=False, num_workers=2)
+    val_loader = torch.utils.data.DataLoader(testset, batch_size=128, shuffle=False, num_workers=2)
 
 
 

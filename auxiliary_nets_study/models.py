@@ -16,14 +16,18 @@ class rep(nn.Module):
         # if upto = False we forward just through layer n
         if upto:
             for i in range(n+1):
-                if isinstance(self.blocks[n], LocalLossBlockLinear):
+                if (len(self.blocks) - 2) == i:
                     x = x.view(x.size(0), -1)
+
                 x = self.forward(x,i,upto=False)
                 if type(x) == tuple:
                    x = x[1]
             return x
+        
+        #if (len(self.blocks) - 1) == n:
+         #   print(n)
         if isinstance(self.blocks[n], LocalLossBlockLinear):
-            x = x.view(x.size(0), -1)
+           x = x.view(x.size(0), -1)
         out = self.blocks[n](x)
         return out
       
