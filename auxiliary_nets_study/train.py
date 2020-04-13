@@ -78,9 +78,15 @@ def loss_calc(outputs, y, y_onehot, module, auxillery):
     elif args.loss_sup == 'predsim':                    
         Rh, y_hat_local = outputs
         Ry = similarity_matrix(y_onehot).detach()
-        loss_pred = (1-args.beta) * F.cross_entropy(y_hat_local,  y.detach())
-        loss_sim = args.beta * F.mse_loss(Rh, Ry)
-        loss_sup = loss_pred + loss_sim
+        if args.cuda:
+           Ry = Ry.cuda()
+        if not isinstance(module, nn.Linear):
+           loss_pred = (1-args.beta) * F.cross_entropy(y_hat_local,  y.detach())
+           loss_sim = args.beta * F.mse_loss(Rh, Ry)
+           loss_sup = loss_pred + loss_sim
+        else:
+           loss_sup = F.cross_entropy(y_hat_local,  y.detach())
+
         if not args.no_print_stats and not isinstance(module, nn.Linear):
             module.loss_pred += loss_pred.item() * y.size(0)
             module.loss_sim += loss_sim.item() * y.size(0)
@@ -132,11 +138,10 @@ def main():
     model = VGGn('vgg8b', 32, 3, 10, 1)
     #DGL_Net(aux_type=args.type_aux, block_size=args.block_size)
     args.cuda = not args.no_cuda and torch.cuda.is_available()
-
-    print(model)
     if args.cuda:
         model = model.cuda()
     wandb.watch(model)
+    print(model)
     
     ncnn = len(model.main_cnn.blocks)
     n_cnn = len(model.main_cnn.blocks)
@@ -205,8 +210,11 @@ def main():
                             model.main_cnn.blocks[n], model.auxillary_nets[n])
                     #loss = criterion(outputs, targets)
                     loss.backward()
-                    layer_optim[n].step()
-
+                    layer_optim[n].step()  
+                if isinstance(model.main_cnn.blocks[n], nn.Linear):
+                   loss = criterion(representation, targets)
+                   loss.backward()
+                   layer_optim[n].step()  
                 representation = representation.detach()
                 # measure accuracy and record loss
                 # measure elapsed time
@@ -252,7 +260,11 @@ def validate(val_loader, model, criterion, epoch, n):
                 # measure accuracy and record loss
                 # measure elapsed time 
             output, representation = model(representation, n=n)
-            output = representation
+            if args.loss_sup == "predsim":
+               output = output[1]
+            if isinstance(model.main_cnn.blocks[n], nn.Linear):
+               output = representation
+
             loss = criterion(output, target)
             # measure accuracy and record loss
             prec1 = accuracy(output.data, target)
@@ -264,6 +276,7 @@ def validate(val_loader, model, criterion, epoch, n):
             end = time.time()
 
             total += input.size(0)
+
         print(' * Prec@1 {top1.avg:.3f}'
               .format(top1=top1))
         wandb.log({"top1": top1.avg})
