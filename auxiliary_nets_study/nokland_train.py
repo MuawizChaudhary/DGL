@@ -181,12 +181,14 @@ def test(epoch):
         if args.cuda:
             target_onehot = target_onehot.cuda()
         h, y, y_onehot =  data, target, target_onehot
-        #for counter in range(len(model.main_cnn.blocks)):
-        #    n = counter
-        outputs, h = model(h, n=(len(model.main_cnn.blocks)-1), upto=True)
-   
-  
-        test_loss += F.cross_entropy(output, target).item() * data.size(0)
+        for counter in range(len(model.main_cnn.blocks)):
+           n = counter
+           outputs, h = model(h, n=n)
+        loss = loss_calc(h, outputs, y, y_onehot, model.main_cnn.blocks[-1], model.auxillary_nets[-1])
+
+        #test_loss += F.cross_entropy(output, target).item() * data.size(0)
+           #test_loss += loss_calc(h, output, y, y_onehot, model.main_cnnmo, auxillery_layer).item()
+
         pred = output.max(1)[1] # get the index of the max log-probability
         correct += pred.eq(target_).cpu().sum()
     

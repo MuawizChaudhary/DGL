@@ -212,8 +212,13 @@ def validate(val_loader, model, criterion, epoch, n):
             target = torch.autograd.Variable(target)
 
             representation = input
-            output, _ = model(representation, n=n, upto=True)
-
+            #output, _ = model(representation, n=n, upto=True)
+            for i in range(n):
+                output, representation = model(representation, n=i)
+                representation = representation.detach()
+                # measure accuracy and record loss
+                # measure elapsed time 
+            output, representation = model(representation, n=n)
 
             loss = criterion(output, target)
             # measure accuracy and record loss

@@ -16,14 +16,14 @@ class rep(nn.Module):
         # if upto = False we forward just through layer n
         if upto:
             for i in range(n+1):
-                if (len(self.blocks) - 2) == i and isinstance(self.blocks[n], LocalLossBlockLinear):
-                    x, x_return = x.view(x.size(0), -1)
-                if isinstance(self.blocks[n], nn.MaxPool2d) or isinstance(self.blocks[n], nn.Linear):
-                    out = self.blocks[n](x)
+                if (len(self.blocks) - 2) == i and isinstance(self.blocks[i], LocalLossBlockLinear):
+                    x = x.view(x.size(0), -1)
+                if isinstance(self.blocks[i], nn.MaxPool2d) or isinstance(self.blocks[i], nn.Linear):
+                    out = self.blocks[i](x)
                     return out, out
+
                 x, x_return = self.forward(x,i,upto=False)
             return x, x_return
-        
         if isinstance(self.blocks[n], LocalLossBlockLinear):
            x = x.view(x.size(0), -1)
         if isinstance(self.blocks[n], nn.MaxPool2d) or isinstance(self.blocks[n], nn.Linear):
