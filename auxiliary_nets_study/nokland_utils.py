@@ -2,6 +2,14 @@ import torch
 import os
 from torchvision import datasets, transforms
 from settings import parse_args
+import numpy as np
+np.random.seed(25)
+import random
+random.seed(25)
+torch.manual_seed(25)
+torch.cuda.manual_seed(25)
+
+
 
 args = parse_args()
 
@@ -32,6 +40,15 @@ def similarity_matrix(x):
 
 
 def dataset_load(kwargs):
+    #if args.cuda:
+    #cudnn.enabled = True
+    #torch.backends.cudnn.deterministic = True
+    #torch.backends.cudnn.benchmark = False
+    #        
+    torch.manual_seed(25)
+    #if args.cuda:
+    #torch.cuda.manual_seed(25)
+
     if args.dataset == 'CIFAR10':
         input_dim = 32
         input_ch = 3
@@ -42,11 +59,13 @@ def dataset_load(kwargs):
                 transforms.ToTensor(),
                 transforms.Normalize((0.424, 0.415, 0.384), (0.283, 0.278, 0.284))
             ])
-        dataset_train = datasets.CIFAR10('../data/CIFAR10', train=True, download=True, transform=train_transform)
+        dataset_train = datasets.CIFAR10('../data/CIFAR10', train=True,
+                download=True, transform=train_transform)
         train_loader = torch.utils.data.DataLoader(
             dataset_train,
             sampler = None,
-            batch_size=args.batch_size, shuffle=True, **kwargs)
+            batch_size=args.batch_size, shuffle=False, num_workers=0,
+                worker_init_fn=_init_fn, **kwargs)
         test_loader = torch.utils.data.DataLoader(
             datasets.CIFAR10('../data/CIFAR10', train=False, 
                 transform=transforms.Compose([
@@ -59,8 +78,20 @@ def dataset_load(kwargs):
     else:
         print('No valid dataset is specified')
     
-def allclose_test(output, epoch, index):
-    path = "torch_tensor_" + str(epoch) + "_" + str(index) + ".pt"
+def allclose_test(output, epoch, index, path=None):
+    if path is None:
+        path = "torch_tensor_" + str(epoch) + "_" + str(index) + ".pt"
+    if os.path.exists(path):
+        if torch.allclose(torch.load(path), output):
+            print("We are allclose")
+        else:
+            print("YOU MADE A MISTAKE")
+    else:
+        torch.save(output, path)
+
+def outputs_test(output, path=None):
+    if path is None:
+        path = "torch_tensor_" + str(epoch) + "_" + str(index) + ".pt"
     if os.path.exists(path):
         if torch.allclose(torch.load(path), output):
             print("We are allclose")
@@ -69,3 +100,5 @@ def allclose_test(output, epoch, index):
     else:
         torch.save(output, path)
     
+def _init_fn(worker_id):
+    np.random.seed(25)
