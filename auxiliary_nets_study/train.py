@@ -56,7 +56,8 @@ def accuracy(output, target, topk=(1,)):
 
 #####
 def lr_scheduler(lr_0, epoch):
-    lr = lr_0 * .25  ** bisect_right([200, 300, 350,375], epoch)
+    lr = args.lr * args.lr_decay_fact ** bisect_right(args.lr_decay_milestones, (epoch))
+    #lr = lr_0 * .25  ** bisect_right([200, 300, 350,375], epoch)
     #lr = lr_0*0.2**(epoch // 15)
     return lr
 
@@ -122,7 +123,7 @@ def main():
         to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
         if len(list(to_train)) != 0:
             to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
-            layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n])#, weight_decay=5e-4)
+            layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n], weight_decay=args.weight_decay, amsgrad=args.optim == 'amsgrad')#, weight_decay=5e-4)
         else:
             layer_optim[n] = None
 
