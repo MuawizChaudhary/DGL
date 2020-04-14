@@ -15,7 +15,7 @@ from bisect import bisect_right
 import math
 import os
 import itertools
-from nokland_utils import count_parameters, to_one_hot, dataset_load, allclose_test, similarity_matrix, outputs_test
+from nokland_utils import count_parameters, to_one_hot, dataset_load, allclose_test, similarity_matrix
 from settings import parse_args
 from models import LocalLossBlockLinear, LocalLossBlockConv, Net, VGGn
 import wandb   
@@ -40,16 +40,16 @@ def train(epoch, lr):
     # Loop train set
     for batch_idx, (d, y) in enumerate(train_loader):
         if args.cuda:
-            data, target = data.cuda(), target.cuda()
+            d, y = d.cuda(), y.cuda()
         #print(d.size())
         #outputs_test(d[0], "outputs/train_tensor_" + str(batch_idx)) 
 
-        #target_ = target
+        y_ = y
         #print(data[0])
         #target_onehot = to_one_hot(target, num_classes)
         #if args.cuda:
         #    target_onehot = target_onehot.cuda()
-        
+
         loss_total = 0
         #, y_onehot = , target_onehot
         #h, y = data, target
@@ -73,14 +73,14 @@ def train(epoch, lr):
             #    outputs_test(outputs[1][0], "outputs/model_tensor_" + str(batch_idx) + "_" + str(counter))
             #    print(outputs[1][0])
         output = h
-        outputs_test(h[0], "outputs/end_tensor_" + str(batch_idx)) 
+        #outputs_test(h[0], "outputs/end_tensor_" + str(batch_idx)) 
 
      
         loss_total_local += loss_total * output.size(0)
         loss = F.cross_entropy(output, y)#target)
         if args.loss_sup == 'predsim' and not args.backprop:
             loss *= (1 - args.beta) 
-        loss_total_global += loss.item() * y.size(0)
+        loss_total_global += loss.item() * h.size(0)
         #if batch_idx <5:
         #    allclose_test(output[0], epoch, batch_idx)
         #    print(output[0])
@@ -101,7 +101,7 @@ def train(epoch, lr):
         classifier_optim.step()
         classifier_optim.zero_grad()
         pred = output.max(1)[1] # get the index of the max log-probability
-        #correct += pred.eq(target_).cpu().sum()
+        correct += pred.eq(y_).cpu().sum()
         
         # Update progress bar
         if args.progress_bar:
@@ -147,18 +147,21 @@ def loss_calc(h, outputs, y, y_onehot, module, auxillery):
             module.correct += outputs.max(1)[1].eq(y).cpu().sum()
             module.examples += y.size(0)
     elif args.loss_sup == 'predsim':                    
-        Rh, y_hat_local = outputs
-        Ry = similarity_matrix(y_onehot).detach()
-
         if not isinstance(module, nn.Linear):
+           Rh, y_hat_local = outputs
+           Ry = similarity_matrix(y_onehot).detach()
+           if args.cuda:
+              Ry = Ry.cuda()
            loss_pred = (1-args.beta) * F.cross_entropy(y_hat_local,  y.detach())
            loss_sim = args.beta * F.mse_loss(Rh, Ry)
            loss_sup = loss_pred + loss_sim
         else:
-           loss_sup = (1-args.beta) * F.cross_entropy(y_hat_local,  y.detach())
+           y_hat_local = outputs
+           if type(y_hat_local) == tuple:
+              y_hat_local=y_hat_local[1]
+
+           loss_sup =  F.cross_entropy(y_hat_local,  y.detach())
         
-        loss_sim = args.beta * F.mse_loss(Rh, Ry)
-        loss_sup = loss_pred + loss_sim
         if not args.no_print_stats and not isinstance(module, nn.Linear):
             module.loss_pred += loss_pred.item() * y.size(0)
             module.loss_sim += loss_sim.item() * y.size(0)
@@ -169,7 +172,7 @@ def loss_calc(h, outputs, y, y_onehot, module, auxillery):
 
 def backward_optimize(model, loss, h_return, optimizer):
     if model.training:
-        loss.backward()#retain_graph = False)
+        loss.backward(retain_graph = False)
         optimizer.step()
         optimizer.zero_grad()
         h_return.detach_()
@@ -200,10 +203,11 @@ def test(epoch):
         for counter in range(len(model.main_cnn.blocks)):
            n = counter
            output, h = model(h, n=n)
+           if isinstance(model.main_cnn.blocks[n], LocalLossBlockLinear) or isinstance(model.main_cnn.blocks[n], LocalLossBlockConv):
+              loss = loss_calc(h, output, y, y_onehot, model.main_cnn.blocks[n], model.auxillary_nets[n])
         output = h
-        loss = loss_calc(h, outputs, y, y_onehot, model.main_cnn.blocks[-1], model.auxillary_nets[-1])
 
-        #test_loss += F.cross_entropy(output, target).item() * data.size(0)
+        test_loss += F.cross_entropy(output, target).item() * data.size(0)
            #test_loss += loss_calc(h, output, y, y_onehot, model.main_cnnmo, auxillery_layer).item()
 
         pred = output.max(1)[1] # get the index of the max log-probability
@@ -311,7 +315,7 @@ start_epoch = 1 if checkpoint is None else 1 + checkpoint['epoch']
 #start_epoch = 3
 print(args.epochs, start_epoch)
 #args.epochs = 1
-for epoch in range(0, 2):#(start_epoch, args.epochs + 1):#(0, 2):##(start_epoch, args.epochs + 1):#range(0, 1):#
+for epoch in range(start_epoch, args.epochs + 1):#(0, 2):##(start_epoch, args.epochs + 1):#range(0, 1):#
     # Decide learning rate
     lr = args.lr * args.lr_decay_fact ** bisect_right(args.lr_decay_milestones, (epoch-1))
 
@@ -336,65 +340,65 @@ for epoch in range(0, 2):#(start_epoch, args.epochs + 1):#(0, 2):##(start_epoch,
     
     # Train and test    
     print(epoch, lr)
-    train(epoch, lr)
-#    train_loss,train_error,train_print = train(epoch, lr)
-#
-#    #return
-#    test_loss,test_error,test_print = test(epoch)
-#
-#    # Check if to save checkpoint
-#    if args.save_dir is not '':
-#        # Resolve log folder and checkpoint file name
-#        filename = 'chkp_ep{}_lr{:.2e}_trainloss{:.2f}_testloss{:.2f}_trainerr{:.2f}_testerr{:.2f}.tar'.format(
-#                epoch, lr, train_loss, test_loss, train_error, test_error)
-#        dirname = os.path.join(args.save_dir, args.dataset)
-#        dirname = os.path.join(dirname, '{}_mult{:.1f}'.format(args.model, args.feat_mult))
-#        dirname = os.path.join(dirname, '{}_{}x{}_{}_dimdec{}_beta{}_bs{}_drop{}_{}_wd{}_bp{}_lr{:.2e}'.format(
-#                args.nonlin, args.num_layers, args.num_hidden, args.loss_sup + args.loss_sup,  args.dim_in_decoder, args.beta, args.batch_size, args.dropout, args.optim, args.weight_decay, int(args.backprop), args.lr))
-#        
-#        # Create log directory
-#        if not os.path.exists(dirname):
-#            os.makedirs(dirname)
-#        elif epoch==1 and os.path.exists(dirname):
-#            # Delete old files
-#            for f in os.listdir(dirname):
-#                os.remove(os.path.join(dirname, f))
-#        
-#        # Add log entry to log file
-#        with open(os.path.join(dirname, 'log.txt'), 'a') as f:
-#            if epoch == 1:
-#                f.write('{}\n\n'.format(args))
-#                f.write('{}\n\n'.format(model))
-#                if not args.backprop:
-#                   f.write('{}\n\n'.format(optimizers[-1]))
-#                else:
-#                   f.write('{}\n\n'.format(optimizers))
-#
-#                f.write('Model {} has {} parameters influenced by global loss\n\n'.format(args.model, count_parameters(model)))
-#            f.write(train_print)
-#            f.write(test_print)
-#            f.write('\n')
-#            f.close()
-#        
-#        # Save checkpoint for every epoch
-#        torch.save({
-#            'epoch': epoch,
-#            'args': args,
-#            'state_dict': model.state_dict() if (save_state_dict or epoch==args.epochs) else None,
-#            'train_loss': train_error,
-#            'train_error': train_error,
-#            'test_loss': test_loss,
-#            'test_error': test_error,
-#        }, os.path.join(dirname, filename))  
-#    
-#        # Save checkpoint for last epoch with state_dict (for resuming)
-#        torch.save({
-#            'epoch': epoch,
-#            'args': args,
-#            'state_dict': model.state_dict(),
-#            'train_loss': train_error,
-#            'train_error': train_error,
-#            'test_loss': test_loss,
-#            'test_error': test_error,
-#        }, os.path.join(dirname, 'chkp_last_epoch.tar')) 
+    #train(epoch, lr)
+    train_loss,train_error,train_print = train(epoch, lr)
+
+    #return
+    test_loss,test_error,test_print = test(epoch)
+
+    # Check if to save checkpoint
+    if args.save_dir is not '':
+        # Resolve log folder and checkpoint file name
+        filename = 'chkp_ep{}_lr{:.2e}_trainloss{:.2f}_testloss{:.2f}_trainerr{:.2f}_testerr{:.2f}.tar'.format(
+                epoch, lr, train_loss, test_loss, train_error, test_error)
+        dirname = os.path.join(args.save_dir, args.dataset)
+        dirname = os.path.join(dirname, '{}_mult{:.1f}'.format(args.model, args.feat_mult))
+        dirname = os.path.join(dirname, '{}_{}x{}_{}_dimdec{}_beta{}_bs{}_drop{}_{}_wd{}_bp{}_lr{:.2e}'.format(
+                args.nonlin, args.num_layers, args.num_hidden, args.loss_sup + args.loss_sup,  args.dim_in_decoder, args.beta, args.batch_size, args.dropout, args.optim, args.weight_decay, int(args.backprop), args.lr))
+        
+        # Create log directory
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
+        elif epoch==1 and os.path.exists(dirname):
+            # Delete old files
+            for f in os.listdir(dirname):
+                os.remove(os.path.join(dirname, f))
+        
+        # Add log entry to log file
+        with open(os.path.join(dirname, 'log.txt'), 'a') as f:
+            if epoch == 1:
+                f.write('{}\n\n'.format(args))
+                f.write('{}\n\n'.format(model))
+                if not args.backprop:
+                   f.write('{}\n\n'.format(optimizers[-1]))
+                else:
+                   f.write('{}\n\n'.format(optimizers))
+
+                f.write('Model {} has {} parameters influenced by global loss\n\n'.format(args.model, count_parameters(model)))
+            f.write(train_print)
+            f.write(test_print)
+            f.write('\n')
+            f.close()
+        
+        # Save checkpoint for every epoch
+        torch.save({
+            'epoch': epoch,
+            'args': args,
+            'state_dict': model.state_dict() if (save_state_dict or epoch==args.epochs) else None,
+            'train_loss': train_error,
+            'train_error': train_error,
+            'test_loss': test_loss,
+            'test_error': test_error,
+        }, os.path.join(dirname, filename))  
+    
+        # Save checkpoint for last epoch with state_dict (for resuming)
+        torch.save({
+            'epoch': epoch,
+            'args': args,
+            'state_dict': model.state_dict(),
+            'train_loss': train_error,
+            'train_error': train_error,
+            'test_loss': test_loss,
+            'test_error': test_error,
+        }, os.path.join(dirname, 'chkp_last_epoch.tar')) 
    
