@@ -17,88 +17,12 @@ import itertools
 import time
 from models import auxillary_classifier2, DGL_Net, VGGn
 from settings import parse_args
-from bisect import bisect_right
-from nokland_utils import to_one_hot, similarity_matrix, dataset_load, outputs_test
+from nokland_utils import to_one_hot, similarity_matrix, dataset_load, outputs_test, AverageMeter, accuracy, lr_scheduler, loss_calc
 import wandb
 import numpy as np
 np.random.seed(25)
 import random
 random.seed(25)
-
-
-#### Some helper functions
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
-
-def accuracy(output, target, topk=(1,)):
-    """Computes the precision@k for the specified values of k"""
-    maxk = max(topk)
-    batch_size = target.size(0)
-            
-    _, pred = output.topk(maxk, 1, True, True)
-    pred = pred.t()
-    correct = pred.eq(target.view(1, -1).expand_as(pred))
-                        
-    res = []
-    for k in topk:
-        correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
-        res.append(correct_k.mul_(100.0 / batch_size))
-    return res
-
-
-#####
-def lr_scheduler(lr_0, epoch):
-    lr = args.lr * args.lr_decay_fact ** bisect_right(args.lr_decay_milestones, (epoch))
-    #lr = lr_0 * .25  ** bisect_right([200, 300, 350,375], epoch)
-    #lr = lr_0*0.2**(epoch // 15)
-    return lr
-
-def loss_calc(outputs, y, y_onehot, module, auxillery):
-    # Calculate supervised loss
-    if args.loss_sup == 'sim':
-        Ry = similarity_matrix(y_onehot).detach()
-        loss_sup = F.mse_loss(outputs, Ry)
-        if not args.no_print_stats:
-            module.loss_sim += loss_sup.item() * y.size(0)
-            module.examples += y.size(0)
-    elif args.loss_sup == 'pred':
-        loss_sup = F.cross_entropy(outputs,  y.detach())
-        if not args.no_print_stats and not isinstance(module, nn.Linear):
-            module.loss_pred += loss_sup.item() * y.size(0)
-            module.correct += outputs.max(1)[1].eq(y).cpu().sum()
-            module.examples += y.size(0)
-    elif args.loss_sup == 'predsim':                    
-        Rh, y_hat_local = outputs
-        Ry = similarity_matrix(y_onehot).detach()
-        if args.cuda:
-           Ry = Ry.cuda()
-        if not isinstance(module, nn.Linear):
-           loss_pred = (1-args.beta) * F.cross_entropy(y_hat_local,  y.detach())
-           loss_sim = args.beta * F.mse_loss(Rh, Ry)
-           loss_sup = loss_pred + loss_sim
-        else:
-           loss_sup = (1-args.beta) * F.cross_entropy(y_hat_local,  y.detach())
-
-        if not args.no_print_stats and not isinstance(module, nn.Linear):
-            module.loss_pred += loss_pred.item() * y.size(0)
-            module.loss_sim += loss_sim.item() * y.size(0)
-            module.correct += y_hat_local.max(1)[1].eq(y).cpu().sum()
-            module.examples += y.size(0)
-    return loss_sup
 
 
 ##################### Logs
@@ -154,7 +78,13 @@ def main():
     input_dim, input_ch, num_classes, train_transform, dataset_train, train_loader, val_loader = dataset_load(kwargs)
 
 
-    model = VGGn('vgg8b', 32, 3, 10, 1)
+    if args.model == 'mlp':
+        model = Net(args.num_layers, args.num_hidden, input_dim, input_ch, num_classes)
+    elif args.model.startswith('vgg'):
+        model = VGGn(args.model, input_dim, input_ch, num_classes, args.feat_mult)
+    else:
+        print('No valid model defined')
+
     #DGL_Net(aux_type=args.type_aux, block_size=args.block_size)
     if args.cuda:
         model = model.cuda()
@@ -194,7 +124,7 @@ def main():
 
 
         for n in range(ncnn):
-            layer_lr[n] = lr_scheduler(args.lr, epoch-1)
+            layer_lr[n] = lr_scheduler(epoch-1)
             print(layer_lr[n])
             optimizer = layer_optim[n]
             if optimizer is not None: 
@@ -229,18 +159,14 @@ def main():
                 outputs, representation = model(representation, n=n)
 
                 if layer_optim[n] is not None and not isinstance(model.main_cnn.blocks[n], nn.Linear):
-                    loss = loss_calc(outputs, targets, to_one_hot(targets),
-                            model.main_cnn.blocks[n], model.auxillary_nets[n])
-                    #loss = criterion(outputs, targets)
+                    loss = loss_calc(outputs, targets, to_one_hot(targets), model.main_cnn.blocks[n])
                     loss.backward()
                     layer_optim[n].step()  
-                    layer_optim[n].zero_grad()
 
-                if isinstance(model.main_cnn.blocks[n], nn.Linear):
-                    loss = (1-args.beta)*criterion(representation, targets)
+                if layer_optim[n] is not None and isinstance(model.main_cnn.blocks[n], nn.Linear):
+                    loss = criterion(representation, targets)
                     loss.backward()
                     layer_optim[n].step()  
-                    layer_optim[n].zero_grad()
 
                 representation = representation.detach()
                 # measure accuracy and record loss
