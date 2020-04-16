@@ -16,7 +16,7 @@ import math
 import os
 import itertools
 from utils import count_parameters, to_one_hot, dataset_load,\
-similarity_matrix, outputs_test, loss_calc, lr_scheduler, optim_init
+similarity_matrix,  loss_calc, lr_scheduler, optim_init
 from settings import parse_args
 from models import LocalLossBlockLinear, LocalLossBlockConv, Net, VGGn
 import wandb
@@ -69,11 +69,7 @@ def train(epoch, lr, ncnn):
                 optimizer.step()
                 h.detach_()
                 loss_total += loss.item()
-                outputs_test(outputs[1][0], "outputs/model_tensor_" + str(batch_idx) + "_" + str(n) + "_" + str(epoch))
-
         output = h
-        outputs_test(outputs[0], "outputs/end_tensor_" + str(batch_idx) + "_" + str(n) + "_" + str(epoch))
-     
         loss_total_local += loss_total * h.size(0)
         loss = F.cross_entropy(output, y)
         if args.loss_sup == 'predsim' and not args.backprop:
