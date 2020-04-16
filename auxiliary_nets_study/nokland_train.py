@@ -19,8 +19,20 @@ from utils import count_parameters, to_one_hot, dataset_load, allclose_test,\
 similarity_matrix, outputs_test, loss_calc, lr_scheduler, optim_init
 from settings import parse_args
 from models import LocalLossBlockLinear, LocalLossBlockConv, Net, VGGn
-#import wandb   
-    
+import wandb
+
+
+
+
+import git
+repo = git.Repo(search_parent_directories=True)
+sha = repo.head.object.hexsha
+print(sha)
+
+
+
+
+
 def train(epoch, lr, ncnn):
     ''' Train model on train set'''
     model.train()
@@ -161,14 +173,14 @@ def test(epoch):
 
     error_percent = 100 - 100.0 * float(correct) / len(test_loader.dataset)
 
-    #wandb.log({"Test Loss Global": loss_average, "Error": error_percent})
+    wandb.log({"Test Loss Global": loss_average, "Error": error_percent})
     
     
     return loss_average, error_percent
     
    
 args = parse_args()
-#wandb.init(config=args, project='dgl-refactored')
+wandb.init(config=args, project='dgl-refactored')
 
 if args.cuda:
     cudnn.enabled = True
@@ -220,7 +232,7 @@ if checkpoint is not None:
     
 if args.cuda:
     model.cuda()
-#wandb.watch(model)
+wandb.watch(model)
 
 if args.progress_bar:
     from tqdm import tqdm
