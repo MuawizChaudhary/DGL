@@ -3,9 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import init
 import math
-from settings import parse_args
 from utils import similarity_matrix
-args = parse_args()
 
 class rep(nn.Module):
     def __init__(self, blocks):
