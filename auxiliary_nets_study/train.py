@@ -75,9 +75,6 @@ def main():
     layer_optim, layer_lr = optim_init(ncnn, model, args.lr)
 
 ######################### Lets do the training
-    criterion = nn.CrossEntropyLoss()
-    if args.cuda:
-        criterion.cuda()
     for epoch in range(0, args.epochs+1):
         # Make sure we set the bn right
         model.train()
@@ -124,13 +121,8 @@ def main():
                     layer_optim[n].zero_grad()
 
                 outputs, representation = model(representation, n=n)
-                if layer_optim[n] is not None and not isinstance(model.main_cnn.blocks[n], nn.Linear):
+                if layer_optim[n] is not None:
                     loss = loss_calc(outputs, targets, to_one_hot(targets), model.main_cnn.blocks[n])
-                    loss.backward()
-                    layer_optim[n].step()  
-
-                if layer_optim[n] is not None and isinstance(model.main_cnn.blocks[n], nn.Linear):
-                    loss = criterion(representation, targets)
                     loss.backward()
                     layer_optim[n].step()  
 
@@ -159,12 +151,12 @@ def main():
         for n in range(ncnn):
             ##### evaluate on validation set
             if layer_optim[n] is not None:
-                top1test = validate(val_loader, model, criterion, epoch, n)
+                top1test = validate(val_loader, model, epoch, n)
                 with open(name_log_txt, "a") as text_file:
                     print("n: {}, epoch {}, loss: {:.5f}, train top1:{} test top1:{} "
                           .format(n+1, epoch, losses[n].avg, top1[n].avg,top1test), file=text_file)
 
-def validate(val_loader, model, criterion, epoch, n):
+def validate(val_loader, model, epoch, n):
     batch_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
@@ -194,7 +186,7 @@ def validate(val_loader, model, criterion, epoch, n):
             if isinstance(model.main_cnn.blocks[n], nn.Linear):
                output = representation
 
-            loss = criterion(output, target)
+            loss = F.cross_entropy(output, target)
             # measure accuracy and record loss
             prec1 = accuracy(output.data, target)
             losses.update(float(loss.item()), float(input.size(0)))
