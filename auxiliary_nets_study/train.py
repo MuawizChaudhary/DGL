@@ -18,7 +18,7 @@ import time
 from models import auxillary_classifier2, DGL_Net, VGGn
 from settings import parse_args
 from utils import to_one_hot, similarity_matrix, dataset_load, \
-AverageMeter, accuracy, lr_scheduler, loss_calc, optim_init
+AverageMeter, accuracy, lr_scheduler, loss_calc, optim_init, test
 import wandb
 import numpy as np
 np.random.seed(25)
@@ -122,8 +122,6 @@ def main():
             target_onehot = to_one_hot(targets)
             if args.cuda:
                 target_onehot = target_onehot.cuda()
-            #inputs = torch.autograd.Variable(inputs)
-            #targets = torch.autograd.Variable(targets)
 
 
             #Main loop
@@ -156,7 +154,8 @@ def main():
                 # measure elapsed time
                 batch_time[n].update(time.time() - end)
 
-
+        print('epoch: ' + str(epoch) + ' , lr : ' + str(lr))
+        test(epoch, model, test_loader)
         for n in range(ncnn):
             ##### evaluate on validation set
             if layer_optim[n] is not None:

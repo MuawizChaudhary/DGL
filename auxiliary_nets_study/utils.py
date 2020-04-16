@@ -154,3 +154,43 @@ def optim_init(ncnn, model, lr, weight_decay, optimizer):
         else:
             layer_optim[n] = None
     return layer_optim, layer_lr
+
+
+def test(epoch, model, test_loader, cuda=True,num_classes=10):
+    ''' Run model on test set '''
+    model.eval()
+    test_loss = 0
+    correct = 0
+
+    # Loop test set
+    batch_idx = 0
+    for data, target in test_loader:
+        if cuda:
+            data, target = data.cuda(), target.cuda()
+        target_ = target
+        target_onehot = to_one_hot(target, num_classes)
+        if cuda:
+            target_onehot = target_onehot.cuda()
+        h, y, y_onehot = data, target, target_onehot
+        for counter in range(len(model.main_cnn.blocks)):
+            n = counter
+            output, h = model(h, n=n)
+
+        output = h
+
+        batch_idx += 1
+
+        test_loss += F.cross_entropy(output, target).item() * data.size(0)
+        # test_loss += loss_calc(h, output, y, y_onehot, model.main_cnnmo, auxillery_layer).item()
+
+        pred = output.max(1)[1]  # get the index of the max log-probability
+        correct += pred.eq(target_).cpu().sum()
+
+    # Format and print debug string
+    loss_average = test_loss / len(test_loader.dataset)
+
+
+    error_percent = 100 - 100.0 * float(correct) / len(test_loader.dataset)
+    print('error: ' + str(error_percent))
+
+    return loss_average, error_percent
