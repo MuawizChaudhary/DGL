@@ -22,6 +22,18 @@ from models import LocalLossBlockLinear, LocalLossBlockConv, Net, VGGn
 import wandb
 
 
+import sys
+
+import uuid
+filename = str(uuid.uuid4())
+import git
+repo = git.Repo(search_parent_directories=True)
+sha = repo.head.object.hexsha
+print(filename)
+sys.stdout = open(filename, "w")
+print(sha)
+print(" ".join(str(item) for item in sys.argv[1:]))
+
 
 
 
