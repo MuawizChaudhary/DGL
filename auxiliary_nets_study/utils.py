@@ -6,7 +6,6 @@ import time
 import os
 from torchvision import datasets, transforms
 from bisect import bisect_right
-import wandb
 import itertools
 
 def count_parameters(model):
@@ -155,53 +154,3 @@ def optim_init(ncnn, model, lr, weight_decay, optimizer):
         else:
             layer_optim[n] = None
     return layer_optim, layer_lr
-
-def validate(val_loader, model, epoch, n, loss_sup, iscuda):
-    batch_time = AverageMeter()
-    losses = AverageMeter()
-    top1 = AverageMeter()
-    all_targs = []
-    model.eval()
-
-    end = time.time()
-    with torch.no_grad():
-        total = 0
-        for i, (input, target) in enumerate(val_loader):
-            if iscuda:
-                target = target.cuda(non_blocking=True)
-                input = input.cuda(non_blocking=True)
-            input = torch.autograd.Variable(input)
-            target = torch.autograd.Variable(target)
-
-            representation = input
-            #output, _ = model(representation, n=n, upto=True)
-            for i in range(n):
-                output, representation = model(representation, n=i)
-                representation = representation.detach()
-                # measure accuracy and record loss
-                # measure elapsed time 
-            output, representation = model(representation, n=n)
-            if loss_sup == "predsim":
-               output = output[1]
-            if isinstance(model.main_cnn.blocks[n], nn.Linear):
-               output = representation
-
-            loss = F.cross_entropy(output, target)
-            # measure accuracy and record loss
-            prec1 = accuracy(output.data, target)
-            losses.update(float(loss.item()), float(input.size(0)))
-            top1.update(float(prec1[0]), float(input.size(0)))
-
-            # measure elapsed time
-            batch_time.update(time.time() - end)
-            end = time.time()
-
-            total += input.size(0)
-
-        print(' * Prec@1 {top1.avg:.3f}'
-              .format(top1=top1))
-
-
-    return top1.avg
-
-
