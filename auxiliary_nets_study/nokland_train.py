@@ -16,7 +16,7 @@ import math
 import os
 import itertools
 from utils import count_parameters, to_one_hot, dataset_load,\
-similarity_matrix,  loss_calc, lr_scheduler, optim_init, test
+similarity_matrix,  loss_calc, lr_scheduler, optim_init, test, validate
 from settings import parse_args
 from models import LocalLossBlockLinear, LocalLossBlockConv, Net, VGGn
 #import wandb
@@ -232,11 +232,8 @@ for epoch in range(start_epoch, args.epochs + 1):
     print('epoch: '+str(epoch)+' , lr : '+str(lr))
     test_loss, test_error = test(epoch,model, test_loader)
     for n in range(ncnn):
-        ##### evaluate on validation set
-        if layer_optim[n] is not None:
-            top1test = validate(test_loader, model, epoch, n, args.loss_sup, args.cuda)
-            with open(name_log_txt, "a") as text_file:
-                print("n: {}, epoch {}, loss: {:.5f}, train top1:{} test top1:{} "
-                      .format(n + 1, epoch, losses[n].avg, top1[n].avg, top1test), file=text_file)
+        top1test = validate(test_loader, model, epoch, n, args.loss_sup, args.cuda)
+        print("n: {}, epoch {}, test top1:{} "
+              .format(n + 1, epoch,  top1test))
 
 

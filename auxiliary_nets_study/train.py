@@ -18,7 +18,7 @@ import time
 from models import auxillary_classifier2, DGL_Net, VGGn
 from settings import parse_args
 from utils import to_one_hot, similarity_matrix, dataset_load, \
-AverageMeter, accuracy, lr_scheduler, loss_calc, optim_init, test
+AverageMeter, accuracy, lr_scheduler, loss_calc, optim_init, test, validate
 #import wandb
 import numpy as np
 np.random.seed(25)
@@ -164,64 +164,14 @@ def main():
                 # measure elapsed time
                 batch_time[n].update(time.time() - end)
 
-        print('epoch: ' + str(epoch) + ' , lr : ' + str(lr))
+        print('epoch: ' + str(epoch) + ' , lr : ' + str(lr_scheduler(args.lr, args.lr_decay_fact, args.lr_decay_milestones, epoch-1)))
         test(epoch, model, test_loader)
         for n in range(ncnn):
-            ##### evaluate on validation set
-            if layer_optim[n] is not None:
-                top1test = validate(test_loader, model, epoch, n, args.loss_sup, args.cuda)
-                with open(name_log_txt, "a") as text_file:
-                    print("n: {}, epoch {}, loss: {:.5f}, train top1:{} test top1:{} "
-                          .format(n+1, epoch, losses[n].avg, top1[n].avg,top1test), file=text_file)
-
-def validate(val_loader, model, epoch, n, loss_sup, iscuda):
-    batch_time = AverageMeter()
-    losses = AverageMeter()
-    top1 = AverageMeter()
-    all_targs = []
-    model.eval()
-
-    end = time.time()
-    with torch.no_grad():
-        total = 0
-        for i, (input, target) in enumerate(val_loader):
-            if iscuda:
-                target = target.cuda(non_blocking=True)
-                input = input.cuda(non_blocking=True)
-            input = torch.autograd.Variable(input)
-            target = torch.autograd.Variable(target)
-
-            representation = input
-            #output, _ = model(representation, n=n, upto=True)
-            for i in range(n):
-                output, representation = model(representation, n=i)
-                representation = representation.detach()
-                # measure accuracy and record loss
-                # measure elapsed time 
-            output, representation = model(representation, n=n)
-            if loss_sup == "predsim":
-               output = output[1]
-            if isinstance(model.main_cnn.blocks[n], nn.Linear):
-               output = representation
-
-            loss = F.cross_entropy(output, target)
-            # measure accuracy and record loss
-            prec1 = accuracy(output.data, target)
-            losses.update(float(loss.item()), float(input.size(0)))
-            top1.update(float(prec1[0]), float(input.size(0)))
-
-            # measure elapsed time
-            batch_time.update(time.time() - end)
-            end = time.time()
-
-            total += input.size(0)
-
-        print(' * Prec@1 {top1.avg:.3f}'
-              .format(top1=top1))
-        #wandb.log({"top1": top1.avg})
+            top1test = validate(test_loader, model, epoch, n, args.loss_sup, args.cuda)
+            print("n: {}, epoch {}, test top1:{} "
+                  .format(n + 1, epoch, top1test))
 
 
-    return top1.avg
 
 
 
