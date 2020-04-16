@@ -5,6 +5,7 @@ import torch.optim as optim
 import os
 from torchvision import datasets, transforms
 from bisect import bisect_right
+import wandb
 import itertools
 
 def count_parameters(model):
@@ -101,7 +102,7 @@ def loss_calc(outputs, y, y_onehot, module, loss_sup, beta, no_similarity_std):
                 print("GGGJDD")
                 y_hat_local=y_hat_local[1]
             print("GDDD")
-            loss_sup =   F.cross_entropy(y_hat_local,  y)#.detach())
+            loss_sup = (1-beta) * F.cross_entropy(y_hat_local,  y)#.detach())
     return loss_sup
 
 #### Some helper functions
@@ -152,5 +153,54 @@ def optim_init(ncnn, model, lr, weight_decay, optimizer):
         else:
             layer_optim[n] = None
     return layer_optim, layer_lr
+
+def validate(val_loader, model, epoch, n):
+    batch_time = AverageMeter()
+    losses = AverageMeter()
+    top1 = AverageMeter()
+    all_targs = []
+    model.eval()
+
+    end = time.time()
+    with torch.no_grad():
+        total = 0
+        for i, (input, target) in enumerate(val_loader):
+            if args.cuda:
+                target = target.cuda(non_blocking=True)
+                input = input.cuda(non_blocking=True)
+            input = torch.autograd.Variable(input)
+            target = torch.autograd.Variable(target)
+
+            representation = input
+            #output, _ = model(representation, n=n, upto=True)
+            for i in range(n):
+                output, representation = model(representation, n=i)
+                representation = representation.detach()
+                # measure accuracy and record loss
+                # measure elapsed time 
+            output, representation = model(representation, n=n)
+            if args.loss_sup == "predsim":
+               output = output[1]
+            if isinstance(model.main_cnn.blocks[n], nn.Linear):
+               output = representation
+
+            loss = F.cross_entropy(output, target)
+            # measure accuracy and record loss
+            prec1 = accuracy(output.data, target)
+            losses.update(float(loss.item()), float(input.size(0)))
+            top1.update(float(prec1[0]), float(input.size(0)))
+
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
+
+            total += input.size(0)
+
+        print(' * Prec@1 {top1.avg:.3f}'
+              .format(top1=top1))
+        wandb.log({"top1": top1.avg})
+
+
+    return top1.avg
 
 

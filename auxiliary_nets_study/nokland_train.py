@@ -61,9 +61,13 @@ def train(epoch, lr, ncnn):
             if optimizer is not None and not args.backprop and not isinstance(model.main_cnn.blocks[n], nn.Linear):
                 loss = loss_calc(outputs, y, y_onehot, model.main_cnn.blocks[n],
                         args.loss_sup, args.beta, args.no_similarity_std)
+                wandb.log({"Local Layer " + str(n)+ " Loss": loss.item()})
+                print(loss.item())
+
                 loss.backward(retain_graph = False)
                 optimizer.step()
                 h.detach_()
+
                 loss_total += loss.item()
             if counter == 0:
                 print(outputs[1].size())
@@ -77,15 +81,18 @@ def train(epoch, lr, ncnn):
         loss = F.cross_entropy(output, y)
         if args.loss_sup == 'predsim' and not args.backprop:
             loss *= (1 - args.beta) 
+        print(loss.item())
+        wandb.log({"Local Layer " + str(11)+ " Loss": loss.item()})
+
         loss_total_global += loss.item() * h.size(0)
-        if batch_idx <5:
-            allclose_test(output[0], epoch, batch_idx)
-            print(output[0])
-            print()
-        else:
-            return
-        if batch_idx == 4:
-            return
+        #if batch_idx <5:
+        #    allclose_test(output[0], epoch, batch_idx)
+        #    print(output[0])
+        #    print()
+        #else:
+        #    return
+        #if batch_idx == 4:
+        #    return
 
         # Backward pass and optimizer step
         # For local loss functions, this will only affect output layer
@@ -107,6 +114,12 @@ def train(epoch, lr, ncnn):
             
     if args.progress_bar:
         pbar.close()
+
+    for n in range(ncnn):
+            ##### evaluate on validation set
+        if layer_optim[n] is not None:
+            top1test = validate(test_loader, model, epoch, n)
+            
         
     # Format and print debug string
     loss_average_local = loss_total_local / len(train_loader.dataset)
@@ -266,7 +279,7 @@ for epoch in range(0, 2):#(start_epoch, args.epochs + 1):#(0, 2):##(start_epoch,
     
     # Train and test    
     print(epoch, lr)
-    train(epoch, lr)
+    train(epoch, lr, ncnn)
     #train_loss,train_error = train(epoch, lr)
 
     ##return
