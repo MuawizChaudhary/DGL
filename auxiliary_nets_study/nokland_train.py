@@ -21,7 +21,7 @@ from settings import parse_args
 from models import LocalLossBlockLinear, LocalLossBlockConv, Net, VGGn
 import wandb   
     
-def train(epoch, lr):
+def train(epoch, lr, ncnn):
     ''' Train model on train set'''
     model.train()
     correct = 0
@@ -49,29 +49,21 @@ def train(epoch, lr):
         #h, y = data, target
         y_onehot = target_onehot
         h = d
-        for counter in range(len(model.main_cnn.blocks)):
+        for counter in range(ncnn):
             n = counter
-            module =  model.main_cnn.blocks[n]
-            auxillery_layer = model.auxillary_nets[n]
             optimizer  = optimizers[n]
             
             if optimizer is not None and not args.backprop:
                 optimizer.zero_grad()
-            if h is None:
-                print(h)
-
-
+            
             outputs, h = model(h, n=n)
-            if h is None:
-                print(h)
 
-            if optimizer is not None and not args.backprop and not isinstance(module, nn.Linear):
-                loss = loss_calc(outputs, y, to_one_hot(y), module,
+            if optimizer is not None and not args.backprop and not isinstance(model.main_cnn.blocks[n], nn.Linear):
+                loss = loss_calc(outputs, y, y_onehot, model.main_cnn.blocks[n],
                         args.loss_sup, args.beta, args.no_similarity_std)
                 loss.backward(retain_graph = False)
                 optimizer.step()
                 h.detach_()
-
                 loss_total += loss.item()
             if counter == 0:
                 print(outputs[1].size())

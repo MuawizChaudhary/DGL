@@ -12,6 +12,7 @@ class rep(nn.Module):
     def forward(self, x, n, upto=False):
         # if upto = True we forward from the input to output of layer n
         # if upto = False we forward just through layer n
+        print(x.size())
         if upto:
             for i in range(n+1):
                 #if (len(self.blocks) - 2) == i and isinstance(self.blocks[i], LocalLossBlockLinear):

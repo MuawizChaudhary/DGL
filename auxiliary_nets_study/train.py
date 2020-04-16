@@ -49,13 +49,18 @@ def main():
         print(args, file=text_file)
     
     kwargs={}
-    input_dim, input_ch, num_classes, train_transform, dataset_train, train_loader, val_loader = dataset_load(kwargs)
+    input_dim, input_ch, num_classes, train_transform, dataset_train,\
+    train_loader, test_loader = dataset_load(args.dataset, args.batch_size, kwargs)
+
 
 
     if args.model == 'mlp':
         model = Net(args.num_layers, args.num_hidden, input_dim, input_ch, num_classes)
     elif args.model.startswith('vgg'):
-        model = VGGn(args.model, input_dim, input_ch, num_classes, args.feat_mult)
+        model = VGGn(args.model, input_dim, input_ch, num_classes, args.feat_mult,
+            args.dropout, args.nonlin, args.no_similarity_std, args.backprop,
+            args.loss_sup, args.dim_in_decoder, args.num_layers,
+            args.num_hidden)
     elif args.model == 'dgl':
         DGL_Net(aux_type=args.type_aux, block_size=args.block_size)
     else:
@@ -73,7 +78,7 @@ def main():
 
     ############### Initialize all
     if not args.backprop:
-        layer_optim, layer_lr = optim_init(ncnn, model, args.lr)
+        layer_optim, layer_lr = optim_init(ncnn, model, args.lr, args.weight_decay, args.optim)
     else:
         raise NotImplementedError
 
@@ -91,8 +96,7 @@ def main():
 
 
         for n in range(ncnn):
-            layer_lr[n] = lr_scheduler(epoch-1)
-            print(layer_lr[n])
+            layer_lr[n] = lr_scheduler(args.lr, args.lr_decay_fact, args.lr_decay_milestones, epoch-1)
             optimizer = layer_optim[n]
             if optimizer is not None: 
                 for param_group in optimizer.param_groups:
@@ -102,14 +106,13 @@ def main():
         for i, (inputs, targets) in enumerate(train_loader):
             # measure data loading time
             #data_time.update(time.time() - end)
-            print(inputs.size(), targets.size())
             outputs_test(inputs[0], "outputs/train_tensor_" + str(i)) 
+            target_onehot = to_one_hot(targets)
 
 
             if args.cuda:
                 targets = targets.cuda(non_blocking = True)
                 inputs = inputs.cuda(non_blocking = True)
-            #print(inputs[0])
             #inputs = torch.autograd.Variable(inputs)
             #targets = torch.autograd.Variable(targets)
 
@@ -119,28 +122,41 @@ def main():
             end_all = time.time()
             for n in range(ncnn):
                 end = time.time()
+                optimizer = layer_optim[n]
+                #print(model.main_cnn.blocks[n])
                 # Forward
-                if layer_optim[n] is not None:
-                    layer_optim[n].zero_grad()
+                if optimizer is not None:
+                    optimizer.zero_grad()
 
                 outputs, representation = model(representation, n=n)
-                if layer_optim[n] is not None:
-                    loss = loss_calc(outputs, targets, to_one_hot(targets), model.main_cnn.blocks[n])
-                    loss.backward()
-                    layer_optim[n].step()  
+                if optimizer is not None:
+                    if n == ncnn-1:
+                        print("FDDD")
+                        print(representation[0])
 
-                representation = representation.detach()
+                        outputs = representation
+                        loss = loss_calc(outputs, targets, target_onehot,
+                            model.main_cnn.blocks[n], args.loss_sup, args.beta,
+                            args.no_similarity_std)
+                    else:
+                        loss = loss_calc(outputs, targets, target_onehot,
+                            model.main_cnn.blocks[n], args.loss_sup, args.beta,
+                            args.no_similarity_std)
+
+                    loss.backward()
+                    optimizer.step()  
+                    representation.detach_()
                 # measure accuracy and record loss
                 # measure elapsed time
                 batch_time[n].update(time.time() - end)
-                if layer_optim[n] is not None:
-                    if isinstance(model.main_cnn.blocks[n], nn.Linear):
-                        outputs = representation
-                    else:
-                        outputs = outputs[1]
-                    prec1 = accuracy(outputs.data, targets)
-                    losses[n].update(float(loss.item()), float(inputs.size(0)))
-                    top1[n].update(float(prec1[0]), float(inputs.size(0)))
+                #if layer_optim[n] is not None:
+                #    if isinstance(model.main_cnn.blocks[n], nn.Linear):
+                #        outputs = representation
+                #    else:
+                #        outputs = outputs[1]
+                #    prec1 = accuracy(outputs.data, targets)
+                #    losses[n].update(float(loss.item()), float(inputs.size(0)))
+                #    top1[n].update(float(prec1[0]), float(inputs.size(0)))
                 if n == 0:
                     print(type(outputs))
                     print(outputs[1][0])

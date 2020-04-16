@@ -88,18 +88,20 @@ def loss_calc(outputs, y, y_onehot, module, loss_sup, beta, no_similarity_std):
         loss_sup = F.mse_loss(outputs, Ry)
     elif loss_sup == 'pred':
         loss_sup = F.cross_entropy(outputs,  y.detach())
-    elif loss_sup == 'predsim':                    
+    elif loss_sup == 'predsim':
         if not isinstance(module, nn.Linear):
-           Rh, y_hat_local = outputs
-           Ry = similarity_matrix(y_onehot, no_similarity_std).detach()
-           loss_pred = (1-beta) * F.cross_entropy(y_hat_local,  y.detach())
-           loss_sim = beta * F.mse_loss(Rh, Ry)
-           loss_sup = loss_pred + loss_sim
+            Rh, y_hat_local = outputs
+            Ry = similarity_matrix(y_onehot, no_similarity_std).detach()
+            loss_pred = (1-beta) * F.cross_entropy(y_hat_local,  y.detach())
+            loss_sim = beta * F.mse_loss(Rh, Ry)
+            loss_sup = loss_pred + loss_sim
         else:
-           y_hat_local = outputs
-           if type(y_hat_local) == tuple:
-              y_hat_local=y_hat_local[1]
-           loss_sup =  F.cross_entropy(y_hat_local,  y.detach())
+            y_hat_local = outputs
+            if type(y_hat_local) == tuple:
+                print("GGGJDD")
+                y_hat_local=y_hat_local[1]
+            print("GDDD")
+            loss_sup =   F.cross_entropy(y_hat_local,  y)#.detach())
     return loss_sup
 
 #### Some helper functions
