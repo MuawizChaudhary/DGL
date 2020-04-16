@@ -200,7 +200,6 @@ def validate(val_loader, model, epoch, n, loss_sup, iscuda):
 
         print(' * Prec@1 {top1.avg:.3f}'
               .format(top1=top1))
-        wandb.log({"top1": top1.avg})
 
 
     return top1.avg
