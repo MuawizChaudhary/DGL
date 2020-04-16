@@ -72,7 +72,10 @@ def main():
         print(model, file=text_file)
 
     ############### Initialize all
-    layer_optim, layer_lr = optim_init(ncnn, model, args.lr)
+    if not args.backprop:
+        layer_optim, layer_lr = optim_init(ncnn, model, args.lr)
+    else:
+        raise NotImplementedError
 
 ######################### Lets do the training
     for epoch in range(0, args.epochs+1):

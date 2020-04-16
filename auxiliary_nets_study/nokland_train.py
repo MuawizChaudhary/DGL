@@ -66,7 +66,7 @@ def train(epoch, lr):
                 print(h)
 
             if optimizer is not None and not args.backprop and not isinstance(module, nn.Linear):
-                loss = loss_calc(outputs, y, to_one_hot(y), module)
+                loss = loss_calc(outputs, y, to_one_hot(y), module, args.no_similarity_std)
                 loss.backward(retain_graph = False)
                 optimizer.step()
                 h.detach_()
@@ -144,7 +144,7 @@ def test(epoch):
            n = counter
            output, h = model(h, n=n)
            if isinstance(model.main_cnn.blocks[n], LocalLossBlockLinear) or isinstance(model.main_cnn.blocks[n], LocalLossBlockConv):
-              loss = loss_calc(output, y, y_onehot, model.main_cnn.blocks[n])
+              loss = loss_calc(output, y, y_onehot, model.main_cnn.blocks[n], args.no_similarity_std)
         output = h
         if batch_idx <5:
             allclose_test(output[0], epoch, batch_idx)
@@ -229,9 +229,9 @@ wandb.watch(model)
 
 if args.progress_bar:
     from tqdm import tqdm
-
+ncnn = len(model.main_cnn.blocks)
 if not args.backprop:
-    optimizers = optim_init(ncnn, model, args.lr)
+    optimizers, _ = optim_init(ncnn, model, args.lr)
 else:
     optimizers = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, amsgrad=args.optim == 'amsgrad')
     

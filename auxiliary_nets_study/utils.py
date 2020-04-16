@@ -21,10 +21,10 @@ def to_one_hot(y, n_dims=None):
     y_one_hot = y_one_hot.view(*y.shape, -1)
     return y_one_hot
 
-def similarity_matrix(x):
+def similarity_matrix(x, no_similarity_std):
     ''' Calculate adjusted cosine similarity matrix of size x.size(0) x x.size(0). '''
     if x.dim() == 4:
-        if not args.no_similarity_std and x.size(1) > 3 and x.size(2) > 1:
+        if not no_similarity_std and x.size(1) > 3 and x.size(2) > 1:
             z = x.view(x.size(0), x.size(1), -1)
             x = z.std(dim=2)
         else:
@@ -83,7 +83,7 @@ def outputs_test(output, path):
         torch.save(output, path)
 
 
-def loss_calc(outputs, y, y_onehot, module):
+def loss_calc(outputs, y, y_onehot, module, no_similarity_std):
     # Calculate supervised loss
     if args.loss_sup == 'sim':
         Ry = similarity_matrix(y_onehot).detach()
@@ -93,7 +93,7 @@ def loss_calc(outputs, y, y_onehot, module):
     elif args.loss_sup == 'predsim':                    
         if not isinstance(module, nn.Linear):
            Rh, y_hat_local = outputs
-           Ry = similarity_matrix(y_onehot).detach()
+           Ry = similarity_matrix(y_onehot, no_similarity_std).detach()
            loss_pred = (1-args.beta) * F.cross_entropy(y_hat_local,  y.detach())
            loss_sim = args.beta * F.mse_loss(Rh, Ry)
            loss_sup = loss_pred + loss_sim

@@ -340,8 +340,11 @@ class LocalLossBlockConv(nn.Module):
         return h, h_return
 
 class Auxillery(nn.Module):
-    def __init__(self, auxillery_linear, dim_out, num_classes, num_out):
+    def __init__(self, auxillery_linear, dim_out, num_classes, num_out, no_similarity_std):
         super(Auxillery, self).__init__()
+
+        self.no_similarity_std = no_similarity_std
+
         if auxillery_linear == "conv":
             if (not args.backprop and (args.loss_sup == 'pred' or args.loss_sup == 'predsim')):
                 # Resolve average-pooling kernel size in order for flattened dim to match args.dim_in_decoder
@@ -378,7 +381,7 @@ class Auxillery(nn.Module):
     def forward(self, x):
         if args.loss_sup == 'sim':
             x_loss = self.sim_loss(x)
-            Rx = similarity_matrix(x_loss)
+            Rx = similarity_matrix(x_loss, self.no_similarity_std)
             return Rx
         elif args.loss_sup == 'pred':
             x = self.avg_pool(x)
@@ -386,7 +389,7 @@ class Auxillery(nn.Module):
             return x
         elif args.loss_sup == 'predsim':
             x_loss = self.sim_loss(x)
-            Rx = similarity_matrix(x_loss)
+            Rx = similarity_matrix(x_loss, self.no_similarity_std)
             x = self.avg_pool(x)
             x = self.decoder_y(x.view(x.size(0), -1))
             return(Rx, x)
@@ -405,17 +408,20 @@ class Net(nn.Module):
         input_ch (int): Number of feature maps for input.
         num_classes (int): Number of classes (used in local prediction loss).
     '''
-    def __init__(self, num_layers, num_hidden, input_dim, input_ch, num_classes):
+    def __init__(self, num_layers, num_hidden, input_dim, input_ch,
+            num_classes, no_similarity_std):
         super(Net, self).__init__()
         
         self.num_hidden = num_hidden
         self.num_layers = num_layers
         reduce_factor = 1
         self.layers = nn.ModuleList([LocalLossBlockLinear(input_dim*input_dim*input_ch, num_hidden, num_classes, first_layer=True)])
-        self.auxillery_layers = nn.ModuleList([Auxillery("linear", num_hidden, num_classes, num_hidden)]) 
+        self.auxillery_layers = nn.ModuleList([Auxillery("linear", num_hidden,
+            num_classes, num_hidden, no_similarity_std)]) 
         self.layers.extend([LocalLossBlockLinear(int(num_hidden // (reduce_factor**(i-1))), int(num_hidden // (reduce_factor**i)), num_classes) for i in range(1, num_layers)])
-        self.auxillery_layers.extend([Auxillery("linear", int(num_hidden // (reduce_factor**i)), num_classes, int(num_hidden // (reduce_factor**i))) for i in range(1, num_layers)])
-        
+        self.auxillery_layers.extend([Auxillery("linear", int(num_hidden //
+            (reduce_factor**i)), num_classes, int(num_hidden //
+                (reduce_factor**i)), no_similarity_std) for i in range(1, num_layers)])
         layer_out = nn.Linear(int(num_hidden //(reduce_factor**(num_layers-1))), num_classes)
         if not args.backprop:
             layer_out.weight.data.zero_()
@@ -456,19 +462,21 @@ class VGGn(nn.Module):
         num_classes (int): Number of classes (used in local prediction loss).
         feat_mult (float): Multiply number of feature maps with this number.
     '''
-    def __init__(self, vgg_name, input_dim, input_ch, num_classes, feat_mult=1):
+    def __init__(self, vgg_name, input_dim, input_ch, num_classes, feat_mult=1,
+            no_similarity_std=False):
         super(VGGn, self).__init__()
         self.cfg = cfg[vgg_name]
         self.input_dim = input_dim
         self.input_ch = input_ch
         self.num_classes = num_classes
+        self.no_similarity_std = no_similarity_std
         features, output_dim, auxillery_layers = self._make_layers(self.cfg, input_ch, input_dim, feat_mult)
 
         for layer in self.cfg:
             if isinstance(layer, int):
                 output_ch = layer
         if args.num_layers > 0: 
-            classifier = Net(args.num_layers, args.num_hidden, output_dim, int(output_ch * feat_mult), num_classes)
+            classifier = Net(args.num_layers, args.num_hidden, output_dim, int(output_ch * feat_mult), num_classes, self.no_similarity_std)
             features.extend([*classifier.layers])
             auxillery_layers.extend([*classifier.auxillery_layers])
         else:
@@ -528,13 +536,15 @@ class VGGn(nn.Module):
                                              num_classes=self.num_classes, 
                                              dim_out=input_dim//scale_cum, 
                                              first_layer=first_layer)]
-                    auxillery_layers += [Auxillery("conv", input_dim//scale_cum, self.num_classes, x)]
+                    auxillery_layers += [Auxillery("conv",
+                        input_dim//scale_cum, self.num_classes, x, self.no_similarity_std)]
                 else:
                     layers += [LocalLossBlockConv(input_ch, x, kernel_size=3, stride=1, padding=1, 
                                              num_classes=self.num_classes, 
                                              dim_out=input_dim//scale_cum, 
                                              first_layer=first_layer)]
-                    auxillery_layers += [Auxillery("conv", input_dim//scale_cum, self.num_classes, x)]
+                    auxillery_layers += [Auxillery("conv",
+                        input_dim//scale_cum, self.num_classes, x, self.no_similarity_std)]
 
                 input_ch = x
                 first_layer = False
