@@ -137,8 +137,8 @@ def accuracy(output, target, topk=(1,)):
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
-def lr_scheduler(epoch):
-    lr = args.lr * args.lr_decay_fact ** bisect_right(args.lr_decay_milestones, (epoch))
+def lr_scheduler(lr, lr_decay_fact, lr_decay_milestones, epoch):
+    lr = lr * lr_decay_fact ** bisect_right(lr_decay_milestones, (epoch))
     return lr
 
 def optim_init(ncnn, model, lr):

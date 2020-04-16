@@ -249,7 +249,8 @@ print(args.epochs, start_epoch)
 #args.epochs = 1
 for epoch in range(0, 2):#(start_epoch, args.epochs + 1):#(0, 2):##(start_epoch, args.epochs + 1):#range(0, 1):#
     # Decide learning rate
-    lr =  lr_scheduler(epoch-1)
+    print(args.lr, args.lr_decay_fact, args.lr_decay_milestones, epoch-1)
+    lr =  lr_scheduler(args.lr, args.lr_decay_fact, args.lr_decay_milestones, epoch-1)
     print(lr)
     save_state_dict = False
     for ms in args.lr_decay_milestones:
