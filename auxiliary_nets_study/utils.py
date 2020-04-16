@@ -190,8 +190,8 @@ def test(epoch, model, test_loader, cuda=True,num_classes=10):
     loss_average = test_loss / len(test_loader.dataset)
 
 
-    error_percent = 100 - 100.0 * float(correct) / len(test_loader.dataset)
-    print('error: ' + str(error_percent))
+    error_percent = 100.0 * float(correct) / len(test_loader.dataset)
+    print('acc: ' + str(error_percent))
 
     return loss_average, error_percent
 
@@ -238,8 +238,8 @@ def validate(val_loader, model, epoch, n, loss_sup, iscuda):
 
             total += input.size(0)
 
-        print(' * Prec@1 {top1.avg:.3f}'
-              .format(top1=top1))
+        #print(' * Prec@1 {top1.avg:.3f}'
+        #      .format(top1=top1))
         #wandb.log({"top1": top1.avg})
 
 

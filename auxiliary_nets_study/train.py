@@ -57,12 +57,7 @@ def main():
     if args.cuda:
         torch.cuda.manual_seed(25)
 
-    time_stamp = str(datetime.datetime.now().isoformat())
-    name_log_txt = time_stamp + str(randint(0, 1000)) + args.name
-    name_log_txt=name_log_txt +'.log'
-    
-    with open(name_log_txt, "a") as text_file:
-        print(args, file=text_file)
+
     
     kwargs={}
     input_dim, input_ch, num_classes, train_transform, dataset_train,\
@@ -89,8 +84,7 @@ def main():
     
     ncnn = len(model.main_cnn.blocks)
     n_cnn = len(model.main_cnn.blocks)
-    with open(name_log_txt, "a") as text_file:
-        print(model, file=text_file)
+
 
     ############### Initialize all
     if not args.backprop:
