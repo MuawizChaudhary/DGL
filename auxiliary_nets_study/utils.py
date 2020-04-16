@@ -66,7 +66,7 @@ def dataset_load(dataset, batch_size, kwargs):
 def allclose_test(output, epoch, index):
     path = "torch_tensor_" + str(epoch) + "_" + str(index) + ".pt"
     if os.path.exists(path):
-        if torch.allclose(torch.load(path), output.cpu):
+        if torch.allclose(torch.load(path), output.cpu()):
             print("We are allclose")
         else:
             print("YOU MADE A MISTAKE")

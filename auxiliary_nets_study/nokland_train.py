@@ -16,7 +16,7 @@ import math
 import os
 import itertools
 from utils import count_parameters, to_one_hot, dataset_load, allclose_test,\
-similarity_matrix, outputs_test, loss_calc, lr_scheduler, optim_init, validate
+similarity_matrix, outputs_test, loss_calc, lr_scheduler, optim_init
 from settings import parse_args
 from models import LocalLossBlockLinear, LocalLossBlockConv, Net, VGGn
 import wandb   
@@ -38,7 +38,7 @@ def train(epoch, lr, ncnn):
         if args.cuda:
             d, y = d.cuda(), y.cuda()
         #print(d.size())
-        outputs_test(d[0], "outputs/train_tensor_" + str(batch_idx) + "_" + str(epoch)) 
+        outputs_test(d[0], "outputs/train_tensor_" + str(batch_idx)) 
 
         y_ = y
         target_onehot = to_one_hot(y, num_classes)
@@ -61,42 +61,31 @@ def train(epoch, lr, ncnn):
             if optimizer is not None and not args.backprop and not isinstance(model.main_cnn.blocks[n], nn.Linear):
                 loss = loss_calc(outputs, y, y_onehot, model.main_cnn.blocks[n],
                         args.loss_sup, args.beta, args.no_similarity_std)
-                wandb.log({"Local Layer " + str(n)+ " Loss": loss.item()})
-                print(loss.item())
-
-
-                outputs_test(outputs[1][0], "outputs/model_tensor_" + str(batch_idx) + "_" + str(counter) + "_" + str(epoch))
-                print(outputs[1][0])
-
                 loss.backward(retain_graph = False)
                 optimizer.step()
                 h.detach_()
-
                 loss_total += loss.item()
-            #if counter == 0:
-            #    print(outputs[1].size())
-            #    outputs_test(outputs[1][0], "outputs/model_tensor_" + str(batch_idx) + "_" + str(counter))
-            #    print(outputs[1][0])
+            if counter == 0:
+                print(outputs[1].size())
+                outputs_test(outputs[1][0], "outputs/model_tensor_" + str(batch_idx) + "_" + str(counter))
+                print(outputs[1][0])
         output = h
-        outputs_test(h[0], "outputs/end_tensor_" + str(batch_idx) + "_" + str(epoch)) 
+        outputs_test(h[0], "outputs/end_tensor_" + str(batch_idx)) 
 
      
         loss_total_local += loss_total * h.size(0)
         loss = F.cross_entropy(output, y)
         if args.loss_sup == 'predsim' and not args.backprop:
             loss *= (1 - args.beta) 
-        print(loss.item())
-        wandb.log({"Local Layer " + str(11)+ " Loss": loss.item()})
-
         loss_total_global += loss.item() * h.size(0)
-        #if batch_idx <5:
-        #    allclose_test(output[0], epoch, batch_idx)
-        #    print(output[0])
-        #    print()
-        #else:
-        #    return
-        #if batch_idx == 4:
-        #    return
+        if batch_idx <5:
+            allclose_test(output[0], epoch, batch_idx)
+            print(output[0])
+            print()
+        else:
+            return
+        if batch_idx == 4:
+            return
 
         # Backward pass and optimizer step
         # For local loss functions, this will only affect output layer
@@ -110,7 +99,7 @@ def train(epoch, lr, ncnn):
         classifier_optim.zero_grad()
         pred = output.max(1)[1] # get the index of the max log-probability
         correct += pred.eq(y_).cpu().sum()
-                
+        
         # Update progress bar
         if args.progress_bar:
             pbar.set_postfix(loss=loss.item(), refresh=False)
@@ -118,12 +107,6 @@ def train(epoch, lr, ncnn):
             
     if args.progress_bar:
         pbar.close()
-
-    for n in range(ncnn):
-            ##### evaluate on validation set
-        if optimizers[n] is not None:
-            top1test = validate(test_loader, model, epoch, n, args.loss_sup)
-            
         
     # Format and print debug string
     loss_average_local = loss_total_local / len(train_loader.dataset)

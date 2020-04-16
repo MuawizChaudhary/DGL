@@ -83,7 +83,6 @@ def main():
         raise NotImplementedError
 
 ######################### Lets do the training
-    args.epoch = 1
     for epoch in range(0, args.epochs+1):
         # Make sure we set the bn right
         model.train()
@@ -115,7 +114,8 @@ def main():
 
             outputs_test(inputs[0], "outputs/train_tensor_" + str(i) + "_" + str(epoch)) 
             target_onehot = to_one_hot(targets)
-            target_onehot = target_onehot.cuda()
+            if args.cuda:
+                target_onehot = target_onehot.cuda()
             #inputs = torch.autograd.Variable(inputs)
             #targets = torch.autograd.Variable(targets)
 
@@ -134,7 +134,7 @@ def main():
                 outputs, representation = model(representation, n=n)
                 if optimizer is not None:
                     if n == ncnn-1:
-                        print("FDDD")
+                        #print("FDDD")
                         print(representation[0])
 
                         outputs = representation
@@ -165,13 +165,13 @@ def main():
                 #    prec1 = accuracy(outputs.data, targets)
                 #    losses[n].update(float(loss.item()), float(inputs.size(0)))
                 #    top1[n].update(float(prec1[0]), float(inputs.size(0)))
-                if n == 0:
-                    print(type(outputs))
-                    print(outputs[1][0])
+                #if n == 0:
+                #    print(type(outputs))
+                #    print(outputs[1][0])
                     #outputs_test(outputs[1][0], "outputs/model_tensor_" + str(i) + "_" + str(n))
                     #print(outputs[1][0])
             #print(representation[0])
-            print(representation[0])
+            #print(representation[0])
             #outputs_test(representation[0], "outputs/end_tensor_" + str(i)) 
 
         for n in range(ncnn):
