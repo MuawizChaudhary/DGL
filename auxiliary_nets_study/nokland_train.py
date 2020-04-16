@@ -19,7 +19,7 @@ from utils import count_parameters, to_one_hot, dataset_load, allclose_test,\
 similarity_matrix, outputs_test, loss_calc, lr_scheduler, optim_init
 from settings import parse_args
 from models import LocalLossBlockLinear, LocalLossBlockConv, Net, VGGn
-import wandb   
+#import wandb   
     
 def train(epoch, lr, ncnn):
     ''' Train model on train set'''
@@ -66,6 +66,7 @@ def train(epoch, lr, ncnn):
                 h.detach_()
                 loss_total += loss.item()
                 outputs_test(outputs[1][0], "outputs/model_tensor_" + str(batch_idx) + "_" + str(n) + "_" + str(epoch))
+                print(outputs[1][0])
 
             #if counter == 0:
             #    #print(outputs[1].size())
@@ -73,7 +74,7 @@ def train(epoch, lr, ncnn):
             #    print(outputs[1][0])
         output = h
         outputs_test(outputs[0], "outputs/end_tensor_" + str(batch_idx) + "_" + str(n) + "_" + str(epoch))
-
+        print(outputs[0])
      
         loss_total_local += loss_total * h.size(0)
         loss = F.cross_entropy(output, y)
@@ -142,14 +143,7 @@ def test(epoch):
               loss = loss_calc(output, y, y_onehot, model.main_cnn.blocks[n],
                       args.loss_sup, args.beta, args.no_similarity_std)
         output = h
-        if batch_idx <5:
-            allclose_test(output[0], epoch, batch_idx)
-            print(output[0])
-            print()
-        else:
-            return
-        if batch_idx == 4:
-            return
+        
         batch_idx += 1
 
 
@@ -167,14 +161,14 @@ def test(epoch):
 
     error_percent = 100 - 100.0 * float(correct) / len(test_loader.dataset)
 
-    wandb.log({"Test Loss Global": loss_average, "Error": error_percent})
+    #wandb.log({"Test Loss Global": loss_average, "Error": error_percent})
     
     
     return loss_average, error_percent
     
    
 args = parse_args()
-wandb.init(config=args, project='dgl-refactored')
+#wandb.init(config=args, project='dgl-refactored')
 
 if args.cuda:
     cudnn.enabled = True
@@ -226,7 +220,7 @@ if checkpoint is not None:
     
 if args.cuda:
     model.cuda()
-wandb.watch(model)
+#wandb.watch(model)
 
 if args.progress_bar:
     from tqdm import tqdm
