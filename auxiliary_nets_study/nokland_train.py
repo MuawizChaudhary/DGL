@@ -73,7 +73,6 @@ def train(epoch, lr, ncnn):
 
         output = h
         outputs_test(outputs[0], "outputs/end_tensor_" + str(batch_idx) + "_" + str(n) + "_" + str(epoch))
-        print(outputs[0])
      
         loss_total_local += loss_total * h.size(0)
         loss = F.cross_entropy(output, y)
