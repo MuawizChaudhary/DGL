@@ -222,7 +222,8 @@ class LocalLossBlockLinear(nn.Module):
         first_layer (bool): True if this is the first layer in the network (used in local reconstruction loss).
         dropout (float): Dropout rate, if None, read from args.dropout.
     '''
-    def __init__(self, num_in, num_out, num_classes, dropout=0.0, first_layer=False):
+    def __init__(self, num_in, num_out, num_classes, dropout=0.0,
+            nonlin="relu", first_layer=False):
         super(LocalLossBlockLinear, self).__init__()
         self.num_classes = num_classes
         self.first_layer = first_layer
@@ -233,9 +234,9 @@ class LocalLossBlockLinear(nn.Module):
         nn.init.constant_(bn.weight, 1)
         nn.init.constant_(bn.bias, 0)          
 
-        if args.nonlin == 'relu':
+        if nonlin == 'relu':
             nonlin = nn.ReLU(inplace=True)
-        elif args.nonlin == 'leakyrelu':
+        elif nonlin == 'leakyrelu':
             nonlin = nn.LeakyReLU(negative_slope=0.01, inplace=True)
         
         self.MLP = nn.Sequential(encoder, bn, nonlin)
@@ -270,7 +271,7 @@ class LocalLossBlockConv(nn.Module):
         bias (bool): True if to use trainable bias.
     '''
     def __init__(self, ch_in, ch_out, kernel_size, stride, padding,
-            num_classes, dim_out, dropout=0.0, first_layer=False):
+            num_classes, dim_out, dropout=0.0, nonlin="relu", first_layer=False):
         super(LocalLossBlockConv, self).__init__()
         self.ch_in = ch_in
         self.ch_out = ch_out
@@ -283,9 +284,9 @@ class LocalLossBlockConv(nn.Module):
         nn.init.constant_(bn.weight, 1)
         nn.init.constant_(bn.bias, 0)
 
-        if args.nonlin == 'relu':
+        if nonlin == 'relu':
             nonlin = nn.ReLU(inplace=True)
-        elif args.nonlin == 'leakyrelu':
+        elif nonlin == 'leakyrelu':
             nonlin = nn.LeakyReLU(negative_slope=0.01, inplace=True)
         
         self.MLP = nn.Sequential(encoder, bn, nonlin)
@@ -370,17 +371,19 @@ class Net(nn.Module):
         num_classes (int): Number of classes (used in local prediction loss).
     '''
     def __init__(self, num_layers, num_hidden, input_dim, input_ch,
-            num_classes, no_similarity_std, dropout=0.0):
+            num_classes, no_similarity_std, dropout=0.0, nonlin='relu'):
         super(Net, self).__init__()
         
         self.num_hidden = num_hidden
         self.num_layers = num_layers
         reduce_factor = 1
         self.layers = nn.ModuleList([LocalLossBlockLinear(input_dim*input_dim*input_ch,
-            num_hidden, num_classes, first_layer=True, dropout=dropout)])
+            num_hidden, num_classes, dropout=dropout, nonlin=nonlin, first_layer=True )])
         self.auxillery_layers = nn.ModuleList([Auxillery("linear", num_hidden,
             num_classes, num_hidden, no_similarity_std)]) 
-        self.layers.extend([LocalLossBlockLinear(int(num_hidden // (reduce_factor**(i-1))), int(num_hidden // (reduce_factor**i)), num_classes, dropout=dropout) for i in range(1, num_layers)])
+        self.layers.extend([LocalLossBlockLinear(int(num_hidden //
+            (reduce_factor**(i-1))), int(num_hidden // (reduce_factor**i)),
+            num_classes, dropout=dropout, nonlin=nonlin) for i in range(1, num_layers)])
         self.auxillery_layers.extend([Auxillery("linear", int(num_hidden //
             (reduce_factor**i)), num_classes, int(num_hidden //
                 (reduce_factor**i)), no_similarity_std) for i in range(1, num_layers)])
@@ -425,7 +428,7 @@ class VGGn(nn.Module):
         feat_mult (float): Multiply number of feature maps with this number.
     '''
     def __init__(self, vgg_name, input_dim, input_ch, num_classes,
-            feat_mult=1, dropout=0.0, no_similarity_std=False):
+            feat_mult=1, dropout=0.0, nonlin="relu", no_similarity_std=False):
         super(VGGn, self).__init__()
         self.cfg = cfg[vgg_name]
         self.input_dim = input_dim
@@ -433,6 +436,7 @@ class VGGn(nn.Module):
         self.num_classes = num_classes
         self.no_similarity_std = no_similarity_std
         self.dropout = dropout
+        self.nonlin = nonlin
         features, output_dim, auxillery_layers = self._make_layers(self.cfg, input_ch, input_dim, feat_mult)
 
         for layer in self.cfg:
@@ -441,7 +445,7 @@ class VGGn(nn.Module):
         if args.num_layers > 0: 
             classifier = Net(args.num_layers, args.num_hidden, output_dim,
                     int(output_ch * feat_mult), num_classes,
-                    self.no_similarity_std, self.dropout)
+                    self.no_similarity_std, self.dropout, nonlin=nonlin)
             features.extend([*classifier.layers])
             auxillery_layers.extend([*classifier.auxillery_layers])
         else:
@@ -501,6 +505,7 @@ class VGGn(nn.Module):
                                              num_classes=self.num_classes, 
                                              dim_out=input_dim//scale_cum,
                                              dropout=self.dropout,
+                                             nonlin=self.nonlin,
                                              first_layer=first_layer)]
                     auxillery_layers += [Auxillery("conv",
                         input_dim//scale_cum, self.num_classes, x, self.no_similarity_std)]
@@ -509,6 +514,7 @@ class VGGn(nn.Module):
                                              num_classes=self.num_classes, 
                                              dim_out=input_dim//scale_cum, 
                                              dropout=self.dropout,
+                                             nonlin=self.nonlin,
                                              first_layer=first_layer)]
                     auxillery_layers += [Auxillery("conv",
                         input_dim//scale_cum, self.num_classes, x, self.no_similarity_std)]
