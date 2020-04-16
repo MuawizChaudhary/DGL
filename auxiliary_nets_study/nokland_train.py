@@ -232,8 +232,9 @@ for epoch in range(start_epoch, args.epochs + 1):
     print('epoch: '+str(epoch)+' , lr : '+str(lr))
     test_loss, test_error = test(epoch,model, test_loader)
     for n in range(ncnn):
-        top1test = validate(test_loader, model, epoch, n, args.loss_sup, args.cuda)
-        print("n: {}, epoch {}, test top1:{} "
-              .format(n + 1, epoch,  top1test))
+        if optimizers[n] is not None:
+            top1test = validate(test_loader, model, epoch, n, args.loss_sup, args.cuda)
+            print("n: {}, epoch {}, test top1:{} "
+                  .format(n + 1, epoch,  top1test))
 
 

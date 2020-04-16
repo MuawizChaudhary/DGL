@@ -167,9 +167,10 @@ def main():
         print('epoch: ' + str(epoch) + ' , lr : ' + str(lr_scheduler(args.lr, args.lr_decay_fact, args.lr_decay_milestones, epoch-1)))
         test(epoch, model, test_loader)
         for n in range(ncnn):
-            top1test = validate(test_loader, model, epoch, n, args.loss_sup, args.cuda)
-            print("n: {}, epoch {}, test top1:{} "
-                  .format(n + 1, epoch, top1test))
+            if layer_optim[n] is not None:
+                top1test = validate(test_loader, model, epoch, n, args.loss_sup, args.cuda)
+                print("n: {}, epoch {}, test top1:{} "
+                      .format(n + 1, epoch, top1test))
 
 
 
