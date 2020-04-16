@@ -66,7 +66,7 @@ def train(epoch, lr, ncnn):
                 h.detach_()
                 loss_total += loss.item()
             if counter == 0:
-                print(outputs[1].size())
+                #print(outputs[1].size())
                 outputs_test(outputs[1][0], "outputs/model_tensor_" + str(batch_idx) + "_" + str(counter))
                 print(outputs[1][0])
         output = h
@@ -241,7 +241,7 @@ print('Model {} has {} parameters influenced by global loss'.format(args.model, 
 start_epoch = 1 if checkpoint is None else 1 + checkpoint['epoch']
 print(args.epochs, start_epoch)
 #args.epochs = 1
-for epoch in range(0, 2):#(start_epoch, args.epochs + 1):#(0, 2):##(start_epoch, args.epochs + 1):#range(0, 1):#
+for epoch in range(start_epoch, args.epochs + 1):
     # Decide learning rate
     print(args.lr, args.lr_decay_fact, args.lr_decay_milestones, epoch-1)
     lr =  lr_scheduler(args.lr, args.lr_decay_fact, args.lr_decay_milestones, epoch-1)
