@@ -83,19 +83,19 @@ def outputs_test(output, path):
         torch.save(output, path)
 
 
-def loss_calc(outputs, y, y_onehot, module, no_similarity_std):
+def loss_calc(outputs, y, y_onehot, module, loss_sup, beta, no_similarity_std):
     # Calculate supervised loss
-    if args.loss_sup == 'sim':
+    if loss_sup == 'sim':
         Ry = similarity_matrix(y_onehot).detach()
         loss_sup = F.mse_loss(outputs, Ry)
-    elif args.loss_sup == 'pred':
+    elif loss_sup == 'pred':
         loss_sup = F.cross_entropy(outputs,  y.detach())
-    elif args.loss_sup == 'predsim':                    
+    elif loss_sup == 'predsim':                    
         if not isinstance(module, nn.Linear):
            Rh, y_hat_local = outputs
            Ry = similarity_matrix(y_onehot, no_similarity_std).detach()
-           loss_pred = (1-args.beta) * F.cross_entropy(y_hat_local,  y.detach())
-           loss_sim = args.beta * F.mse_loss(Rh, Ry)
+           loss_pred = (1-beta) * F.cross_entropy(y_hat_local,  y.detach())
+           loss_sim = beta * F.mse_loss(Rh, Ry)
            loss_sup = loss_pred + loss_sim
         else:
            y_hat_local = outputs
@@ -141,14 +141,14 @@ def lr_scheduler(lr, lr_decay_fact, lr_decay_milestones, epoch):
     lr = lr * lr_decay_fact ** bisect_right(lr_decay_milestones, (epoch))
     return lr
 
-def optim_init(ncnn, model, lr):
+def optim_init(ncnn, model, lr, weight_decay, optimizer):
     layer_optim = [None] * ncnn
-    layer_lr = [args.lr] * ncnn
+    layer_lr = [lr] * ncnn
     for n in range(ncnn):
         to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
         if len(list(to_train)) != 0:
             to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
-            layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n], weight_decay=args.weight_decay, amsgrad=args.optim == 'amsgrad')
+            layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n], weight_decay=weight_decay, amsgrad=optimizer == 'amsgrad')
         else:
             layer_optim[n] = None
     return layer_optim, layer_lr

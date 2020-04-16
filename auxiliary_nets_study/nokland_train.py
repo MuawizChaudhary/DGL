@@ -66,7 +66,8 @@ def train(epoch, lr):
                 print(h)
 
             if optimizer is not None and not args.backprop and not isinstance(module, nn.Linear):
-                loss = loss_calc(outputs, y, to_one_hot(y), module, args.no_similarity_std)
+                loss = loss_calc(outputs, y, to_one_hot(y), module,
+                        args.loss_sup, args.beta, args.no_similarity_std)
                 loss.backward(retain_graph = False)
                 optimizer.step()
                 h.detach_()
@@ -236,7 +237,7 @@ if args.progress_bar:
     from tqdm import tqdm
 ncnn = len(model.main_cnn.blocks)
 if not args.backprop:
-    optimizers, _ = optim_init(ncnn, model, args.lr)
+    optimizers, _ = optim_init(ncnn, model, args.lr, args.weight_decay, args.optim)
 else:
     optimizers = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, amsgrad=args.optim == 'amsgrad')
     
