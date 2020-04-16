@@ -42,7 +42,7 @@ def train(epoch, lr, ncnn):
         if args.cuda:
             d, y = d.cuda(), y.cuda()
         #print(d.size())
-        outputs_test(d[0], "outputs/train_tensor_" + str(batch_idx) + "_" + str(epoch)) 
+        #outputs_test(d[0], "outputs/train_tensor_" + str(batch_idx) + "_" + str(epoch))
 
         y_ = y
         target_onehot = to_one_hot(y, num_classes)

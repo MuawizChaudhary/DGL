@@ -118,7 +118,7 @@ def main():
                 targets = targets.cuda(non_blocking = True)
                 inputs = inputs.cuda(non_blocking = True)
 
-            outputs_test(inputs[0], "outputs/train_tensor_" + str(i) + "_" + str(epoch)) 
+            #outputs_test(inputs[0], "outputs/train_tensor_" + str(i) + "_" + str(epoch))
             target_onehot = to_one_hot(targets)
             if args.cuda:
                 target_onehot = target_onehot.cuda()
