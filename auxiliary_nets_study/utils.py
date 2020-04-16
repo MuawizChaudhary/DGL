@@ -4,10 +4,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 import os
 from torchvision import datasets, transforms
-from settings import parse_args
 from bisect import bisect_right
 import itertools
-args = parse_args()
 
 def count_parameters(model):
     ''' Count number of parameters in model influenced by global loss. '''
