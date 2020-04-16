@@ -26,10 +26,6 @@ import random
 random.seed(25)
 
 
-import git
-repo = git.Repo(search_parent_directories=True)
-sha = repo.head.object.hexsha
-print(sha)
 
 ##################### Logs
 def main():
@@ -37,6 +33,11 @@ def main():
     args = parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     wandb.init(config=args, project="dgl-refactored")
+
+    import git
+    repo = git.Repo(search_parent_directories=True)
+    sha = repo.head.object.hexsha
+    print(sha)
     if args.cuda:
         cudnn.enabled = True
         torch.backends.cudnn.deterministic = True
@@ -131,7 +132,7 @@ def main():
             for n in range(ncnn):
                 end = time.time()
                 optimizer = layer_optim[n]
-                #print(model.main_cnn.blocks[n])
+
                 # Forward
                 if optimizer is not None:
                     optimizer.zero_grad()
@@ -139,9 +140,6 @@ def main():
                 outputs, representation = model(representation, n=n)
                 if optimizer is not None:
                     if n == ncnn-1:
-                        #print("FDDD")
-                        print(representation[0])
-
                         outputs = representation
                         loss = loss_calc(outputs, targets, target_onehot,
                             model.main_cnn.blocks[n], args.loss_sup, args.beta,
@@ -152,32 +150,15 @@ def main():
                         loss = loss_calc(outputs, targets, target_onehot,
                             model.main_cnn.blocks[n], args.loss_sup, args.beta,
                             args.no_similarity_std)
-                        print(outputs[1][0]) 
                         outputs_test(outputs[1][0], "outputs/model_tensor_" + str(i) + "_" + str(n) + "_" + str(epoch))
                     wandb.log({"Local Layer " + str(n)+ " Loss": loss.item()})
-                    print(loss.item())
                     loss.backward()
                     optimizer.step()  
                     representation.detach_()
                 # measure accuracy and record loss
                 # measure elapsed time
                 batch_time[n].update(time.time() - end)
-                #if layer_optim[n] is not None:
-                #    if isinstance(model.main_cnn.blocks[n], nn.Linear):
-                #        outputs = representation
-                #    else:
-                #        outputs = outputs[1]
-                #    prec1 = accuracy(outputs.data, targets)
-                #    losses[n].update(float(loss.item()), float(inputs.size(0)))
-                #    top1[n].update(float(prec1[0]), float(inputs.size(0)))
-                #if n == 0:
-                #    print(type(outputs))
-                #    print(outputs[1][0])
-                    #outputs_test(outputs[1][0], "outputs/model_tensor_" + str(i) + "_" + str(n))
-                    #print(outputs[1][0])
-            #print(representation[0])
-            #print(representation[0])
-            #outputs_test(representation[0], "outputs/end_tensor_" + str(i)) 
+
 
         for n in range(ncnn):
             ##### evaluate on validation set

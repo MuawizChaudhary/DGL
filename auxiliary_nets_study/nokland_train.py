@@ -24,14 +24,6 @@ import wandb
 
 
 
-import git
-repo = git.Repo(search_parent_directories=True)
-sha = repo.head.object.hexsha
-print(sha)
-
-
-
-
 
 def train(epoch, lr, ncnn):
     ''' Train model on train set'''
@@ -78,12 +70,7 @@ def train(epoch, lr, ncnn):
                 h.detach_()
                 loss_total += loss.item()
                 outputs_test(outputs[1][0], "outputs/model_tensor_" + str(batch_idx) + "_" + str(n) + "_" + str(epoch))
-                print(outputs[1][0])
 
-            #if counter == 0:
-            #    #print(outputs[1].size())
-            #    outputs_test(outputs[1][0], "outputs/model_tensor_" + str(batch_idx) + "_" + str(counter))
-            #    print(outputs[1][0])
         output = h
         outputs_test(outputs[0], "outputs/end_tensor_" + str(batch_idx) + "_" + str(n) + "_" + str(epoch))
         print(outputs[0])
@@ -93,14 +80,6 @@ def train(epoch, lr, ncnn):
         if args.loss_sup == 'predsim' and not args.backprop:
             loss *= (1 - args.beta) 
         loss_total_global += loss.item() * h.size(0)
-        #if batch_idx <5:
-        #    allclose_test(output[0], epoch, batch_idx)
-        #    print(output[0])
-        #    print()
-        #else:
-        #    return
-        #if batch_idx == 4:
-        #    return
 
         # Backward pass and optimizer step
         # For local loss functions, this will only affect output layer
@@ -181,6 +160,17 @@ def test(epoch):
    
 args = parse_args()
 wandb.init(config=args, project='dgl-refactored')
+
+
+import git
+repo = git.Repo(search_parent_directories=True)
+sha = repo.head.object.hexsha
+print(sha)
+
+
+
+
+
 
 if args.cuda:
     cudnn.enabled = True
