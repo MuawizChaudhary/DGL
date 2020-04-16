@@ -456,7 +456,9 @@ class VGGn(nn.Module):
         if num_layers > 0: 
             classifier = Net(num_layers, num_hidden, output_dim,
                     int(output_ch * feat_mult), num_classes,
-                    self.no_similarity_std, self.dropout, nonlin=nonlin)
+                    self.no_similarity_std, self.dropout, nonlin=nonlin,
+                    backprop=backprop, loss_sup=loss_sup,
+                    dim_in_decoder=dim_in_decoder)
             features.extend([*classifier.layers])
             auxillery_layers.extend([*classifier.auxillery_layers])
         else:

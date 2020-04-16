@@ -89,6 +89,7 @@ def loss_calc(outputs, y, y_onehot, module, loss_sup, beta, no_similarity_std):
         Ry = similarity_matrix(y_onehot).detach()
         loss_sup = F.mse_loss(outputs, Ry)
     elif loss_sup == 'pred':
+
         loss_sup = F.cross_entropy(outputs,  y.detach())
     elif loss_sup == 'predsim':
         if not isinstance(module, nn.Linear):

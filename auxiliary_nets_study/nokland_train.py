@@ -266,8 +266,8 @@ for epoch in range(start_epoch, args.epochs + 1):
     train_loss,train_error = train(epoch, lr, ncnn)
 
     #return
-    test_loss,test_error,test_print = test(epoch)
-    test(epoch)
+    test_loss,test_error = test(epoch)
+    #test(epoch)
 
     # Check if to save checkpoint
     if args.save_dir is not '':
@@ -298,8 +298,6 @@ for epoch in range(start_epoch, args.epochs + 1):
                    f.write('{}\n\n'.format(optimizers))
 
                 f.write('Model {} has {} parameters influenced by global loss\n\n'.format(args.model, count_parameters(model)))
-            f.write(train_print)
-            f.write(test_print)
             f.write('\n')
             f.close()
         
