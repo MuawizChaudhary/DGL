@@ -30,7 +30,7 @@ import git
 repo = git.Repo(search_parent_directories=True)
 sha = repo.head.object.hexsha
 print(filename)
-sys.stdout = open(filename, "w",buffering=0)
+sys.stdout = open(filename, "wb",buffering=0)
 print(sha)
 print(" ".join(str(item) for item in sys.argv[1:]))
 
