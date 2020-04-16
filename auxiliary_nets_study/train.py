@@ -19,7 +19,7 @@ from models import auxillary_classifier2, DGL_Net, VGGn
 from settings import parse_args
 from utils import to_one_hot, similarity_matrix, dataset_load, \
 AverageMeter, accuracy, lr_scheduler, loss_calc, optim_init, test
-import wandb
+#import wandb
 import numpy as np
 np.random.seed(25)
 import random
@@ -42,7 +42,7 @@ def main():
     global args, best_prec1
     args = parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
-    wandb.init(config=args, project="dgl-refactored")
+    #wandb.init(config=args, project="dgl-refactored")
 
     import git
     repo = git.Repo(search_parent_directories=True)
@@ -84,7 +84,7 @@ def main():
 
     if args.cuda:
         model = model.cuda()
-    wandb.watch(model)
+    #wandb.watch(model)
     print(model)
     
     ncnn = len(model.main_cnn.blocks)
@@ -156,7 +156,7 @@ def main():
                         loss = loss_calc(outputs, targets, target_onehot,
                             model.main_cnn.blocks[n], args.loss_sup, args.beta,
                             args.no_similarity_std)
-                    wandb.log({"Local Layer " + str(n)+ " Loss": loss.item()})
+                    #wandb.log({"Local Layer " + str(n)+ " Loss": loss.item()})
                     loss.backward()
                     optimizer.step()  
                     representation.detach_()
@@ -218,7 +218,7 @@ def validate(val_loader, model, epoch, n, loss_sup, iscuda):
 
         print(' * Prec@1 {top1.avg:.3f}'
               .format(top1=top1))
-        wandb.log({"top1": top1.avg})
+        #wandb.log({"top1": top1.avg})
 
 
     return top1.avg

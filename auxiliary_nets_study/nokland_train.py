@@ -19,7 +19,7 @@ from utils import count_parameters, to_one_hot, dataset_load,\
 similarity_matrix,  loss_calc, lr_scheduler, optim_init, test
 from settings import parse_args
 from models import LocalLossBlockLinear, LocalLossBlockConv, Net, VGGn
-import wandb
+#import wandb
 
 
 import sys
@@ -122,7 +122,7 @@ def train(epoch, lr, ncnn):
     
    
 args = parse_args()
-wandb.init(config=args, project='dgl-refactored')
+#wandb.init(config=args, project='dgl-refactored')
 
 
 import git
@@ -185,7 +185,7 @@ if checkpoint is not None:
     
 if args.cuda:
     model.cuda()
-wandb.watch(model)
+#wandb.watch(model)
 
 if args.progress_bar:
     from tqdm import tqdm
