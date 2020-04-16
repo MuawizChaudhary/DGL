@@ -269,7 +269,7 @@ for epoch in range(start_epoch, args.epochs + 1):
     # Train and test    
     print(epoch, lr)
     #train(epoch, lr, ncnn)
-    train_loss,train_error = train(epoch, lr)
+    train_loss,train_error = train(epoch, lr, ncnn)
 
     #return
     test_loss,test_error,test_print = test(epoch)
