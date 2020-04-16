@@ -129,16 +129,15 @@ def main():
                 representation = representation.detach()
                 # measure accuracy and record loss
                 # measure elapsed time
-                #batch_time[n].update(time.time() - end)
-                #if layer_optim[n] is not None:
-                #    if isinstance(model.main_cnn.blocks[n], nn.Linear):
-                #        outputs = representation
-                #    else:
-                #        outputs = outputs[1]
-                #    prec1 = accuracy(outputs.data, targets)
-                #    losses[n].update(float(loss.item()), float(inputs.size(0)))
-                #    top1[n].update(float(prec1[0]), float(inputs.size(0)))
-                #    layer_optim[n].zero_grad()
+                batch_time[n].update(time.time() - end)
+                if layer_optim[n] is not None:
+                    if isinstance(model.main_cnn.blocks[n], nn.Linear):
+                        outputs = representation
+                    else:
+                        outputs = outputs[1]
+                    prec1 = accuracy(outputs.data, targets)
+                    losses[n].update(float(loss.item()), float(inputs.size(0)))
+                    top1[n].update(float(prec1[0]), float(inputs.size(0)))
                 if n == 0:
                     print(type(outputs))
                     print(outputs[1][0])
