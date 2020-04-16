@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.nn import init
 import math
 from settings import parse_args
-from nokland_utils import similarity_matrix
+from utils import similarity_matrix
 args = parse_args()
 
 class rep(nn.Module):
@@ -16,21 +16,31 @@ class rep(nn.Module):
         # if upto = False we forward just through layer n
         if upto:
             for i in range(n+1):
-                if (len(self.blocks) - 2) == i and isinstance(self.blocks[i], LocalLossBlockLinear):
-                    x = x.view(x.size(0), -1)
+                #if (len(self.blocks) - 2) == i and isinstance(self.blocks[i], LocalLossBlockLinear):
                 if isinstance(self.blocks[i], nn.MaxPool2d) or isinstance(self.blocks[i], nn.Linear):
                     out = self.blocks[i](x)
                     return out, out
-
-                x, x_return = self.forward(x,i,upto=False)
-            return x, x_return
-        if isinstance(self.blocks[n], LocalLossBlockLinear):
-           x = x.view(x.size(0), -1)
+                elif isinstance(self.blocks[i], LocalLossBlockLinear):
+                    x = x.view(x.size(0), -1)
+                    x, x_return = self.forward(x,i,upto=False)
+                    return x, x_return
+                else:
+                    x, x_return = self.forward(x,i,upto=False)
+                    return x, x_return
         if isinstance(self.blocks[n], nn.MaxPool2d) or isinstance(self.blocks[n], nn.Linear):
+            print("F")
             out = self.blocks[n](x)
             return out, out
-        out, out_return = self.blocks[n](x)
-        return out, out_return
+        elif isinstance(self.blocks[n], LocalLossBlockLinear):
+            x = x.view(x.size(0), -1)
+            print("G")
+            print(x.size())
+            out, out_return = self.blocks[n](x)
+            return out, out_return
+        else:
+            print("E")
+            out, out_return = self.blocks[n](x)
+            return out, out_return
       
 class DGL_Net(nn.Module):
     def __init__(self, depth=8, num_classes=10, aux_type='mlp', block_size=1,

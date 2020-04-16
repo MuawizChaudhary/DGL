@@ -1,11 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.optim as optim
 import os
 from torchvision import datasets, transforms
 from settings import parse_args
 from bisect import bisect_right
-
+import itertools
 args = parse_args()
 
 def count_parameters(model):
@@ -139,5 +140,18 @@ def accuracy(output, target, topk=(1,)):
 def lr_scheduler(epoch):
     lr = args.lr * args.lr_decay_fact ** bisect_right(args.lr_decay_milestones, (epoch))
     return lr
+
+def optim_init(ncnn, model, lr):
+    layer_optim = [None] * ncnn
+    layer_lr = [args.lr] * ncnn
+    #print(len(list(model.main_cnn.blocks[0].parameters())), len(list(model.auxillary_nets[0].parameters())))
+    for n in range(ncnn):
+        to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
+        if len(list(to_train)) != 0:
+            to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
+            layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n], weight_decay=args.weight_decay, amsgrad=args.optim == 'amsgrad')#, weight_decay=5e-4)
+        else:
+            layer_optim[n] = None
+    return layer_optim, layer_lr
 
 

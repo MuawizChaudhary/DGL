@@ -15,7 +15,7 @@ from bisect import bisect_right
 import math
 import os
 import itertools
-from nokland_utils import count_parameters, to_one_hot, dataset_load, allclose_test, similarity_matrix, outputs_test, loss_calc, lr_scheduler
+from utils import count_parameters, to_one_hot, dataset_load, allclose_test, similarity_matrix, outputs_test, loss_calc, lr_scheduler
 from settings import parse_args
 from models import LocalLossBlockLinear, LocalLossBlockConv, Net, VGGn
 import wandb   
@@ -36,7 +36,8 @@ def train(epoch, lr):
     for batch_idx, (d, y) in enumerate(train_loader):
         if args.cuda:
             d, y = d.cuda(), y.cuda()
-        #outputs_test(d[0], "outputs/train_tensor_" + str(batch_idx)) 
+        #print(d.size())
+        outputs_test(d[0], "outputs/train_tensor_" + str(batch_idx)) 
 
         y_ = y
         target_onehot = to_one_hot(y, num_classes)
@@ -55,20 +56,27 @@ def train(epoch, lr):
             
             if optimizer is not None and not args.backprop:
                 optimizer.zero_grad()
+            if h is None:
+                print(h)
+
+
             outputs, h = model(h, n=n)
+            if h is None:
+                print(h)
 
             if optimizer is not None and not args.backprop and not isinstance(module, nn.Linear):
                 loss = loss_calc(outputs, y, to_one_hot(y), module)
                 loss.backward(retain_graph = False)
                 optimizer.step()
                 h.detach_()
+
                 loss_total += loss.item()
-            #if counter == 0:
-            #    print(outputs[1].size())
-            #    outputs_test(outputs[1][0], "outputs/model_tensor_" + str(batch_idx) + "_" + str(counter))
-            #    print(outputs[1][0])
+            if counter == 0:
+                print(outputs[1].size())
+                outputs_test(outputs[1][0], "outputs/model_tensor_" + str(batch_idx) + "_" + str(counter))
+                print(outputs[1][0])
         output = h
-        #outputs_test(h[0], "outputs/end_tensor_" + str(batch_idx)) 
+        outputs_test(h[0], "outputs/end_tensor_" + str(batch_idx)) 
 
      
         loss_total_local += loss_total * h.size(0)
@@ -122,6 +130,7 @@ def test(epoch):
     correct = 0
     
     # Loop test set
+    batch_idx = 0
     for data, target in test_loader:
         if args.cuda:
             data, target = data.cuda(), target.cuda()
@@ -136,6 +145,17 @@ def test(epoch):
            if isinstance(model.main_cnn.blocks[n], LocalLossBlockLinear) or isinstance(model.main_cnn.blocks[n], LocalLossBlockConv):
               loss = loss_calc(output, y, y_onehot, model.main_cnn.blocks[n])
         output = h
+        if batch_idx <5:
+            allclose_test(output[0], epoch, batch_idx)
+            print(output[0])
+            print()
+        else:
+            return
+        if batch_idx == 4:
+            return
+        batch_idx += 1
+
+
 
         test_loss += F.cross_entropy(output, target).item() * data.size(0)
            #test_loss += loss_calc(h, output, y, y_onehot, model.main_cnnmo, auxillery_layer).item()
@@ -211,25 +231,12 @@ if not args.backprop:
     optimizers = len(model.main_cnn.blocks)*[None]
     for counter in range(len(model.main_cnn.blocks)):
         n = counter
-        #module = model.main_cnn.blocks[counter]
-        #auxillery_layer = model.auxillary_nets[counter]
         to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
         if len(list(to_train)) != 0:
             to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
             optimizers[n] = optim.Adam(to_train, lr=args.lr, weight_decay=args.weight_decay, amsgrad=args.optim == 'amsgrad')#, weight_decay=5e-4)
         else:
             optimizers[n] = None
-
-
-        # temp, make sure to do it for any part that has parameters
-        #if isinstance(module, LocalLossBlockLinear) or isinstance(module, LocalLossBlockConv) or isinstance(module, nn.Linear): 
-        #    to_train = itertools.chain(module.parameters(), auxillery_layer.parameters())
-        #    if args.optim == 'sgd':
-        #        optimizers[counter] = optim.SGD(to_train, lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
-        #    elif args.optim == 'adam' or args.optim == 'amsgrad':
-        #        optimizers[counter] = optim.Adam(to_train, lr=args.lr, weight_decay=args.weight_decay, amsgrad=args.optim == 'amsgrad')
-        #    else:
-        #        print('Unknown optimizer')
 else:
     optimizers = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, amsgrad=args.optim == 'amsgrad')
     
@@ -238,7 +245,6 @@ print('Model {} has {} parameters influenced by global loss'.format(args.model, 
 
 ''' The main training and testing loop '''
 start_epoch = 1 if checkpoint is None else 1 + checkpoint['epoch']
-#start_epoch = 3
 print(args.epochs, start_epoch)
 #args.epochs = 1
 for epoch in range(0, 2):#(start_epoch, args.epochs + 1):#(0, 2):##(start_epoch, args.epochs + 1):#range(0, 1):#
@@ -326,4 +332,5 @@ for epoch in range(0, 2):#(start_epoch, args.epochs + 1):#(0, 2):##(start_epoch,
     #        'test_loss': test_loss,
     #        'test_error': test_error,
     #    }, os.path.join(dirname, 'chkp_last_epoch.tar')) 
+   
    
