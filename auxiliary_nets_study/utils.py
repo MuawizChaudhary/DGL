@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import time
 import os
 from torchvision import datasets, transforms
 from bisect import bisect_right
@@ -65,7 +66,7 @@ def dataset_load(dataset, batch_size, kwargs):
 def allclose_test(output, epoch, index):
     path = "torch_tensor_" + str(epoch) + "_" + str(index) + ".pt"
     if os.path.exists(path):
-        if torch.allclose(torch.load(path), output):
+        if torch.allclose(torch.load(path), output.cpu):
             print("We are allclose")
         else:
             print("YOU MADE A MISTAKE")
@@ -74,7 +75,7 @@ def allclose_test(output, epoch, index):
 
 def outputs_test(output, path):
     if os.path.exists(path):
-        if torch.allclose(torch.load(path), output):
+        if torch.allclose(torch.load(path).cpu(), output.cpu()):
             print("We are allclose")
         else:
             print("YOU MADE A MISTAKE")
@@ -154,7 +155,7 @@ def optim_init(ncnn, model, lr, weight_decay, optimizer):
             layer_optim[n] = None
     return layer_optim, layer_lr
 
-def validate(val_loader, model, epoch, n):
+def validate(val_loader, model, epoch, n, loss_sup):
     batch_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
@@ -165,9 +166,8 @@ def validate(val_loader, model, epoch, n):
     with torch.no_grad():
         total = 0
         for i, (input, target) in enumerate(val_loader):
-            if args.cuda:
-                target = target.cuda(non_blocking=True)
-                input = input.cuda(non_blocking=True)
+            target = target.cuda(non_blocking=True)
+            input = input.cuda(non_blocking=True)
             input = torch.autograd.Variable(input)
             target = torch.autograd.Variable(target)
 
@@ -179,7 +179,7 @@ def validate(val_loader, model, epoch, n):
                 # measure accuracy and record loss
                 # measure elapsed time 
             output, representation = model(representation, n=n)
-            if args.loss_sup == "predsim":
+            if loss_sup == "predsim":
                output = output[1]
             if isinstance(model.main_cnn.blocks[n], nn.Linear):
                output = representation

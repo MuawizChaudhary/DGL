@@ -16,7 +16,7 @@ import math
 import os
 import itertools
 from utils import count_parameters, to_one_hot, dataset_load, allclose_test,\
-similarity_matrix, outputs_test, loss_calc, lr_scheduler, optim_init
+similarity_matrix, outputs_test, loss_calc, lr_scheduler, optim_init, validate
 from settings import parse_args
 from models import LocalLossBlockLinear, LocalLossBlockConv, Net, VGGn
 import wandb   
@@ -38,7 +38,7 @@ def train(epoch, lr, ncnn):
         if args.cuda:
             d, y = d.cuda(), y.cuda()
         #print(d.size())
-        outputs_test(d[0], "outputs/train_tensor_" + str(batch_idx)) 
+        outputs_test(d[0], "outputs/train_tensor_" + str(batch_idx) + "_" + str(epoch)) 
 
         y_ = y
         target_onehot = to_one_hot(y, num_classes)
@@ -64,17 +64,21 @@ def train(epoch, lr, ncnn):
                 wandb.log({"Local Layer " + str(n)+ " Loss": loss.item()})
                 print(loss.item())
 
+
+                outputs_test(outputs[1][0], "outputs/model_tensor_" + str(batch_idx) + "_" + str(counter) + "_" + str(epoch))
+                print(outputs[1][0])
+
                 loss.backward(retain_graph = False)
                 optimizer.step()
                 h.detach_()
 
                 loss_total += loss.item()
-            if counter == 0:
-                print(outputs[1].size())
-                outputs_test(outputs[1][0], "outputs/model_tensor_" + str(batch_idx) + "_" + str(counter))
-                print(outputs[1][0])
+            #if counter == 0:
+            #    print(outputs[1].size())
+            #    outputs_test(outputs[1][0], "outputs/model_tensor_" + str(batch_idx) + "_" + str(counter))
+            #    print(outputs[1][0])
         output = h
-        outputs_test(h[0], "outputs/end_tensor_" + str(batch_idx)) 
+        outputs_test(h[0], "outputs/end_tensor_" + str(batch_idx) + "_" + str(epoch)) 
 
      
         loss_total_local += loss_total * h.size(0)
@@ -106,7 +110,7 @@ def train(epoch, lr, ncnn):
         classifier_optim.zero_grad()
         pred = output.max(1)[1] # get the index of the max log-probability
         correct += pred.eq(y_).cpu().sum()
-        
+                
         # Update progress bar
         if args.progress_bar:
             pbar.set_postfix(loss=loss.item(), refresh=False)
@@ -117,8 +121,8 @@ def train(epoch, lr, ncnn):
 
     for n in range(ncnn):
             ##### evaluate on validation set
-        if layer_optim[n] is not None:
-            top1test = validate(test_loader, model, epoch, n)
+        if optimizers[n] is not None:
+            top1test = validate(test_loader, model, epoch, n, args.loss_sup)
             
         
     # Format and print debug string

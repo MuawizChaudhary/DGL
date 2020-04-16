@@ -12,7 +12,7 @@ class rep(nn.Module):
     def forward(self, x, n, upto=False):
         # if upto = True we forward from the input to output of layer n
         # if upto = False we forward just through layer n
-        print(x.size())
+        #print(x.size())
         if upto:
             for i in range(n+1):
                 #if (len(self.blocks) - 2) == i and isinstance(self.blocks[i], LocalLossBlockLinear):
@@ -27,17 +27,17 @@ class rep(nn.Module):
                     x, x_return = self.forward(x,i,upto=False)
                     return x, x_return
         if isinstance(self.blocks[n], nn.MaxPool2d) or isinstance(self.blocks[n], nn.Linear):
-            print("F")
+            #print("F")
             out = self.blocks[n](x)
             return out, out
         elif isinstance(self.blocks[n], LocalLossBlockLinear):
             x = x.view(x.size(0), -1)
-            print("G")
-            print(x.size())
+            #print("G")
+            #print(x.size())
             out, out_return = self.blocks[n](x)
             return out, out_return
         else:
-            print("E")
+            #print("E")
             out, out_return = self.blocks[n](x)
             return out, out_return
       

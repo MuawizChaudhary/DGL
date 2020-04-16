@@ -107,13 +107,15 @@ def main():
         for i, (inputs, targets) in enumerate(train_loader):
             # measure data loading time
             #data_time.update(time.time() - end)
-            outputs_test(inputs[0], "outputs/train_tensor_" + str(i)) 
-            target_onehot = to_one_hot(targets)
 
 
             if args.cuda:
                 targets = targets.cuda(non_blocking = True)
                 inputs = inputs.cuda(non_blocking = True)
+
+            outputs_test(inputs[0], "outputs/train_tensor_" + str(i) + "_" + str(epoch)) 
+            target_onehot = to_one_hot(targets)
+            target_onehot = target_onehot.cuda()
             #inputs = torch.autograd.Variable(inputs)
             #targets = torch.autograd.Variable(targets)
 
@@ -139,10 +141,14 @@ def main():
                         loss = loss_calc(outputs, targets, target_onehot,
                             model.main_cnn.blocks[n], args.loss_sup, args.beta,
                             args.no_similarity_std)
+
+                        outputs_test(outputs[0], "outputs/end_tensor_" + str(i) + "_" + str(n) + "_" + str(epoch))
                     else:
                         loss = loss_calc(outputs, targets, target_onehot,
                             model.main_cnn.blocks[n], args.loss_sup, args.beta,
                             args.no_similarity_std)
+                        print(outputs[1][0]) 
+                        outputs_test(outputs[1][0], "outputs/model_tensor_" + str(i) + "_" + str(n) + "_" + str(epoch))
                     wandb.log({"Local Layer " + str(n)+ " Loss": loss.item()})
                     print(loss.item())
                     loss.backward()
@@ -162,16 +168,16 @@ def main():
                 if n == 0:
                     print(type(outputs))
                     print(outputs[1][0])
-                    outputs_test(outputs[1][0], "outputs/model_tensor_" + str(i) + "_" + str(n))
+                    #outputs_test(outputs[1][0], "outputs/model_tensor_" + str(i) + "_" + str(n))
                     #print(outputs[1][0])
             #print(representation[0])
             print(representation[0])
-            outputs_test(representation[0], "outputs/end_tensor_" + str(i)) 
+            #outputs_test(representation[0], "outputs/end_tensor_" + str(i)) 
 
         for n in range(ncnn):
             ##### evaluate on validation set
             if layer_optim[n] is not None:
-                top1test = validate(val_loader, model, epoch, n)
+                top1test = validate(val_loader, model, epoch, n, loss_sup)
                 with open(name_log_txt, "a") as text_file:
                     print("n: {}, epoch {}, loss: {:.5f}, train top1:{} test top1:{} "
                           .format(n+1, epoch, losses[n].avg, top1[n].avg,top1test), file=text_file)
