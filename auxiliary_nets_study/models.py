@@ -243,27 +243,7 @@ class LocalLossBlockLinear(nn.Module):
         if self.dropout_p > 0:
             self.dropout = torch.nn.Dropout(p=self.dropout_p, inplace=False)
            
-        self.clear_stats()
-    
-    def clear_stats(self):
-        if not args.no_print_stats:
-            self.loss_sim = 0.0
-            self.loss_pred = 0.0
-            self.correct = 0
-            self.examples = 0
-
-    def print_stats(self):
-        if not args.backprop:
-            stats = '{}, loss_sim={:.4f}, loss_pred={:.4f}, error={:.3f}%, num_examples={}\n'.format(
-                    self.MLP[0],
-                    self.loss_sim / self.examples, 
-                    self.loss_pred / self.examples,
-                    100.0 * float(self.examples - self.correct) / self.examples,
-                    self.examples)
-            return stats
-        else:
-            return ''
-    
+  
     def forward(self, x):        
         h = self.MLP(x)
         h_return = h
@@ -311,26 +291,6 @@ class LocalLossBlockConv(nn.Module):
 
         if self.dropout_p > 0:
             self.dropout = torch.nn.Dropout2d(p=self.dropout_p, inplace=False)
-        self.clear_stats()
-    
-    def clear_stats(self):
-        if not args.no_print_stats:
-            self.loss_sim = 0.0
-            self.loss_pred = 0.0
-            self.correct = 0
-            self.examples = 0
-
-    def print_stats(self):
-        if not args.backprop:
-            stats = '{}, loss_sim={:.4f}, loss_pred={:.4f}, error={:.3f}%, num_examples={}\n'.format(
-                    self.MLP[0],
-                    self.loss_sim / self.examples, 
-                    self.loss_pred / self.examples,
-                    100.0 * float(self.examples - self.correct) / self.examples,
-                    self.examples)
-            return stats
-        else:
-            return ''
     
     def forward(self, x):
         h = self.MLP(x)
