@@ -17,7 +17,7 @@ import itertools
 import time
 from models import auxillary_classifier2, DGL_Net, VGGn
 from settings import parse_args
-from utils import to_one_hot, similarity_matrix, dataset_load, outputs_test,\
+from utils import to_one_hot, similarity_matrix, dataset_load, \
 AverageMeter, accuracy, lr_scheduler, loss_calc, optim_init
 import wandb
 import numpy as np
@@ -144,13 +144,10 @@ def main():
                         loss = loss_calc(outputs, targets, target_onehot,
                             model.main_cnn.blocks[n], args.loss_sup, args.beta,
                             args.no_similarity_std)
-
-                        outputs_test(outputs[0], "outputs/end_tensor_" + str(i) + "_" + str(n) + "_" + str(epoch))
                     else:
                         loss = loss_calc(outputs, targets, target_onehot,
                             model.main_cnn.blocks[n], args.loss_sup, args.beta,
                             args.no_similarity_std)
-                        outputs_test(outputs[1][0], "outputs/model_tensor_" + str(i) + "_" + str(n) + "_" + str(epoch))
                     wandb.log({"Local Layer " + str(n)+ " Loss": loss.item()})
                     loss.backward()
                     optimizer.step()  
