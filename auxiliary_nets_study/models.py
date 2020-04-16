@@ -302,22 +302,24 @@ class LocalLossBlockConv(nn.Module):
         return h, h_return
 
 class Auxillery(nn.Module):
-    def __init__(self, auxillery_linear, dim_out, num_classes, num_out, no_similarity_std):
+    def __init__(self, auxillery_linear, dim_out, num_classes, num_out,
+            no_similarity_std, backprop, loss_sup, dim_in_decoder_arg):
         super(Auxillery, self).__init__()
 
         self.no_similarity_std = no_similarity_std
+        self.loss_sup = loss_sup
 
         if auxillery_linear == "conv":
-            if (not args.backprop and (args.loss_sup == 'pred' or args.loss_sup == 'predsim')):
+            if (not backprop and (loss_sup == 'pred' or loss_sup == 'predsim')):
                 # Resolve average-pooling kernel size in order for flattened dim to match args.dim_in_decoder
                 ks_h, ks_w = 1, 1
                 dim_out_h, dim_out_w = dim_out, dim_out
                 dim_in_decoder = num_out*dim_out_h*dim_out_w
-                while dim_in_decoder > args.dim_in_decoder and ks_h < dim_out:
+                while dim_in_decoder > dim_in_decoder_arg and ks_h < dim_out:
                     ks_h*=2
                     dim_out_h = math.ceil(dim_out / ks_h)
                     dim_in_decoder = num_out*dim_out_h*dim_out_w
-                    if dim_in_decoder > args.dim_in_decoder:
+                    if dim_in_decoder > dim_in_decoder_arg:
                        ks_w*=2
                        dim_out_w = math.ceil(dim_out / ks_w)
                        dim_in_decoder = num_out*dim_out_h*dim_out_w 
@@ -327,29 +329,29 @@ class Auxillery(nn.Module):
                     self.avg_pool = nn.AvgPool2d((ks_h,ks_w), padding=(pad_h, pad_w))
                 else:
                     self.avg_pool = nn.Identity()
-            if not args.backprop and (args.loss_sup == 'pred' or args.loss_sup == 'predsim'):
+            if not backprop and (loss_sup == 'pred' or loss_sup == 'predsim'):
                 self.decoder_y = nn.Linear(dim_in_decoder, num_classes)
                 self.decoder_y.weight.data.zero_()
-            if not args.backprop and (args.loss_sup == 'sim' or args.loss_sup == 'predsim'):
+            if not backprop and (loss_sup == 'sim' or loss_sup == 'predsim'):
                 self.sim_loss = nn.Conv2d(num_out, num_out, 3, stride=1, padding=1, bias=False) 
         else:
             self.avg_pool = nn.Identity()
-            if not args.backprop and (args.loss_sup == 'pred' or args.loss_sup == 'predsim'):
+            if not backprop and (loss_sup == 'pred' or loss_sup == 'predsim'):
                 self.decoder_y = nn.Linear(num_out, num_classes)
                 self.decoder_y.weight.data.zero_()
-            if not args.backprop and (args.loss_sup == 'sim' or args.loss_sup == 'predsim'):
+            if not backprop and (loss_sup == 'sim' or loss_sup == 'predsim'):
                 self.sim_loss = nn.Linear(num_out, num_out, bias=False)
 
     def forward(self, x):
-        if args.loss_sup == 'sim':
+        if self.loss_sup == 'sim':
             x_loss = self.sim_loss(x)
             Rx = similarity_matrix(x_loss, self.no_similarity_std)
             return Rx
-        elif args.loss_sup == 'pred':
+        elif self.loss_sup == 'pred':
             x = self.avg_pool(x)
             x = self.decoder_y(x.view(x.size(0), -1))
             return x
-        elif args.loss_sup == 'predsim':
+        elif self.loss_sup == 'predsim':
             x_loss = self.sim_loss(x)
             Rx = similarity_matrix(x_loss, self.no_similarity_std)
             x = self.avg_pool(x)
@@ -371,31 +373,33 @@ class Net(nn.Module):
         num_classes (int): Number of classes (used in local prediction loss).
     '''
     def __init__(self, num_layers, num_hidden, input_dim, input_ch,
-            num_classes, no_similarity_std, dropout=0.0, nonlin='relu'):
+            num_classes, no_similarity_std, dropout=0.0, nonlin='relu',
+            backprop=False, loss_sup="predsim", dim_in_decoder=2048):
         super(Net, self).__init__()
         
         self.num_hidden = num_hidden
         self.num_layers = num_layers
+        self.backprop = backprop
         reduce_factor = 1
         self.layers = nn.ModuleList([LocalLossBlockLinear(input_dim*input_dim*input_ch,
             num_hidden, num_classes, dropout=dropout, nonlin=nonlin, first_layer=True )])
         self.auxillery_layers = nn.ModuleList([Auxillery("linear", num_hidden,
-            num_classes, num_hidden, no_similarity_std)]) 
+            num_classes, num_hidden, no_similarity_std, backprop, loss_sup, dim_in_decoder)]) 
         self.layers.extend([LocalLossBlockLinear(int(num_hidden //
             (reduce_factor**(i-1))), int(num_hidden // (reduce_factor**i)),
             num_classes, dropout=dropout, nonlin=nonlin) for i in range(1, num_layers)])
         self.auxillery_layers.extend([Auxillery("linear", int(num_hidden //
             (reduce_factor**i)), num_classes, int(num_hidden //
-                (reduce_factor**i)), no_similarity_std) for i in range(1, num_layers)])
+                (reduce_factor**i)), no_similarity_std, backprop, loss_sup, dim_in_decoder) for i in range(1, num_layers)])
         layer_out = nn.Linear(int(num_hidden //(reduce_factor**(num_layers-1))), num_classes)
-        if not args.backprop:
+        if not backprop:
             layer_out.weight.data.zero_()
         
         self.layers.extend([layer_out])
         self.auxillery_layers.extend([nn.Identity(1)])
             
     def parameters(self):
-        if not args.backprop:
+        if not self.backprop:
             return self.layer_out.parameters()
         else:
             return super(Net, self).parameters()
@@ -428,7 +432,8 @@ class VGGn(nn.Module):
         feat_mult (float): Multiply number of feature maps with this number.
     '''
     def __init__(self, vgg_name, input_dim, input_ch, num_classes,
-            feat_mult=1, dropout=0.0, nonlin="relu", no_similarity_std=False):
+            feat_mult=1, dropout=0.0, nonlin="relu", no_similarity_std=False,
+            backprop=False, loss_sup="predsim", dim_in_decoder=2048):
         super(VGGn, self).__init__()
         self.cfg = cfg[vgg_name]
         self.input_dim = input_dim
@@ -437,6 +442,10 @@ class VGGn(nn.Module):
         self.no_similarity_std = no_similarity_std
         self.dropout = dropout
         self.nonlin = nonlin
+        self.backprop = backprop
+        self.loss_sup = loss_sup
+        self.dim_in_decoder = dim_in_decoder
+
         features, output_dim, auxillery_layers = self._make_layers(self.cfg, input_ch, input_dim, feat_mult)
 
         for layer in self.cfg:
@@ -457,7 +466,7 @@ class VGGn(nn.Module):
         self.auxillary_nets = nn.ModuleList(auxillery_layers)
             
     def parameters(self):
-        if not args.backprop:
+        if not self.backprop:
             return self.main_cnn.blocks[len(self.main_cnn.blocks) - 1].parameters()
         else:
             return super(VGGn, self).parameters()
@@ -508,7 +517,9 @@ class VGGn(nn.Module):
                                              nonlin=self.nonlin,
                                              first_layer=first_layer)]
                     auxillery_layers += [Auxillery("conv",
-                        input_dim//scale_cum, self.num_classes, x, self.no_similarity_std)]
+                        input_dim//scale_cum, self.num_classes, x,
+                        self.no_similarity_std, self.backprop, self.loss_sup,
+                        self.dim_in_decoder)]
                 else:
                     layers += [LocalLossBlockConv(input_ch, x, kernel_size=3, stride=1, padding=1, 
                                              num_classes=self.num_classes, 
@@ -517,7 +528,8 @@ class VGGn(nn.Module):
                                              nonlin=self.nonlin,
                                              first_layer=first_layer)]
                     auxillery_layers += [Auxillery("conv",
-                        input_dim//scale_cum, self.num_classes, x, self.no_similarity_std)]
+                        input_dim//scale_cum, self.num_classes, x,
+                        self.no_similarity_std, self.backprop, self.loss_sup, self.dim_in_decoder)]
 
                 input_ch = x
                 first_layer = False
