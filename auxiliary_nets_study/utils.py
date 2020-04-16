@@ -154,3 +154,93 @@ def optim_init(ncnn, model, lr, weight_decay, optimizer):
         else:
             layer_optim[n] = None
     return layer_optim, layer_lr
+
+
+def test(epoch, model, test_loader, cuda=True,num_classes=10):
+    ''' Run model on test set '''
+    model.eval()
+    test_loss = 0
+    correct = 0
+
+    # Loop test set
+    batch_idx = 0
+    for data, target in test_loader:
+        if cuda:
+            data, target = data.cuda(), target.cuda()
+        target_ = target
+        target_onehot = to_one_hot(target, num_classes)
+        if cuda:
+            target_onehot = target_onehot.cuda()
+        h, y, y_onehot = data, target, target_onehot
+        for counter in range(len(model.main_cnn.blocks)):
+            n = counter
+            output, h = model(h, n=n)
+
+        output = h
+
+        batch_idx += 1
+
+        test_loss += F.cross_entropy(output, target).item() * data.size(0)
+        # test_loss += loss_calc(h, output, y, y_onehot, model.main_cnnmo, auxillery_layer).item()
+
+        pred = output.max(1)[1]  # get the index of the max log-probability
+        correct += pred.eq(target_).cpu().sum()
+
+    # Format and print debug string
+    loss_average = test_loss / len(test_loader.dataset)
+
+
+    error_percent = 100.0 * float(correct) / len(test_loader.dataset)
+    print('acc: ' + str(error_percent))
+
+    return loss_average, error_percent
+
+
+def validate(val_loader, model, epoch, n, loss_sup, iscuda):
+    batch_time = AverageMeter()
+    losses = AverageMeter()
+    top1 = AverageMeter()
+    all_targs = []
+    model.eval()
+
+    end = time.time()
+    with torch.no_grad():
+        total = 0
+        for i, (input, target) in enumerate(val_loader):
+            if iscuda:
+                target = target.cuda(non_blocking=True)
+                input = input.cuda(non_blocking=True)
+            input = torch.autograd.Variable(input)
+            target = torch.autograd.Variable(target)
+
+            representation = input
+            #output, _ = model(representation, n=n, upto=True)
+            for i in range(n):
+                output, representation = model(representation, n=i)
+                representation = representation.detach()
+                # measure accuracy and record loss
+                # measure elapsed time
+            output, representation = model(representation, n=n)
+            if loss_sup == "predsim":
+               output = output[1]
+            if isinstance(model.main_cnn.blocks[n], nn.Linear):
+               output = representation
+
+            loss = F.cross_entropy(output, target)
+            # measure accuracy and record loss
+            prec1 = accuracy(output.data, target)
+            losses.update(float(loss.item()), float(input.size(0)))
+            top1.update(float(prec1[0]), float(input.size(0)))
+
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
+
+            total += input.size(0)
+
+        #print(' * Prec@1 {top1.avg:.3f}'
+        #      .format(top1=top1))
+        #wandb.log({"top1": top1.avg})
+
+
+    return top1.avg
