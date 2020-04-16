@@ -212,7 +212,8 @@ if not args.resume == '':
 if args.model == 'mlp':
     model = Net(args.num_layers, args.num_hidden, input_dim, input_ch, num_classes)
 elif args.model.startswith('vgg'):
-    model = VGGn(args.model, input_dim, input_ch, num_classes, args.feat_mult)
+    model = VGGn(args.model, input_dim, input_ch, num_classes, args.feat_mult,
+            args.dropout, args.no_similarity_std)
 else:
     print('No valid model defined')
 print(args.model, input_dim, input_ch, num_classes, args.feat_mult)
