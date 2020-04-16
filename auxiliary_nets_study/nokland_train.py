@@ -145,7 +145,8 @@ def test(epoch):
            n = counter
            output, h = model(h, n=n)
            if isinstance(model.main_cnn.blocks[n], LocalLossBlockLinear) or isinstance(model.main_cnn.blocks[n], LocalLossBlockConv):
-              loss = loss_calc(output, y, y_onehot, model.main_cnn.blocks[n], args.no_similarity_std)
+              loss = loss_calc(output, y, y_onehot, model.main_cnn.blocks[n],
+                      args.loss_sup, args.beta, args.no_similarity_std)
         output = h
         if batch_idx <5:
             allclose_test(output[0], epoch, batch_idx)
@@ -278,6 +279,7 @@ for epoch in range(0, 2):#(start_epoch, args.epochs + 1):#(0, 2):##(start_epoch,
 
     ##return
     #test_loss,test_error,test_print = test(epoch)
+    #test(epoch)
 
     ## Check if to save checkpoint
     #if args.save_dir is not '':
