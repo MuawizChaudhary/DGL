@@ -191,7 +191,9 @@ if args.cuda:
 
 
 kwargs = {'num_workers': 0, 'pin_memory': True} if args.cuda else {}
-input_dim, input_ch, num_classes, train_transform, dataset_train, train_loader, test_loader = dataset_load(kwargs)
+input_dim, input_ch, num_classes, train_transform, dataset_train,\
+train_loader,\
+test_loader = dataset_load(args.dataset, args.batch_size, kwargs)
 
 
 checkpoint = None

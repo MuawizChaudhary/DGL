@@ -35,8 +35,8 @@ def similarity_matrix(x, no_similarity_std):
     return R
 
 
-def dataset_load(kwargs):
-    if args.dataset == 'CIFAR10':
+def dataset_load(dataset, batch_size, kwargs):
+    if dataset == 'CIFAR10':
         input_dim = 32
         input_ch = 3
         num_classes = 10
@@ -50,14 +50,14 @@ def dataset_load(kwargs):
         train_loader = torch.utils.data.DataLoader(
             dataset_train,
             sampler = None,
-            batch_size=args.batch_size, shuffle=True, **kwargs)
+            batch_size=batch_size, shuffle=True, **kwargs)
         test_loader = torch.utils.data.DataLoader(
             datasets.CIFAR10('../data/CIFAR10', train=False, 
                 transform=transforms.Compose([
                     transforms.ToTensor(),
                     transforms.Normalize((0.424, 0.415, 0.384), (0.283, 0.278, 0.284))
                 ])),
-            batch_size=args.batch_size, shuffle=False, **kwargs)
+            batch_size=batch_size, shuffle=False, **kwargs)
         return input_dim, input_ch, num_classes, train_transform, dataset_train, train_loader, test_loader
 
     else:
