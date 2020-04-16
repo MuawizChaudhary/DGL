@@ -15,7 +15,8 @@ from bisect import bisect_right
 import math
 import os
 import itertools
-from utils import count_parameters, to_one_hot, dataset_load, allclose_test, similarity_matrix, outputs_test, loss_calc, lr_scheduler
+from utils import count_parameters, to_one_hot, dataset_load, allclose_test,\
+similarity_matrix, outputs_test, loss_calc, lr_scheduler, optim_init
 from settings import parse_args
 from models import LocalLossBlockLinear, LocalLossBlockConv, Net, VGGn
 import wandb   
@@ -225,18 +226,12 @@ if checkpoint is not None:
 if args.cuda:
     model.cuda()
 wandb.watch(model)
+
 if args.progress_bar:
     from tqdm import tqdm
+
 if not args.backprop:
-    optimizers = len(model.main_cnn.blocks)*[None]
-    for counter in range(len(model.main_cnn.blocks)):
-        n = counter
-        to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
-        if len(list(to_train)) != 0:
-            to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
-            optimizers[n] = optim.Adam(to_train, lr=args.lr, weight_decay=args.weight_decay, amsgrad=args.optim == 'amsgrad')#, weight_decay=5e-4)
-        else:
-            optimizers[n] = None
+    optimizers = optim_init(ncnn, model, args.lr)
 else:
     optimizers = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, amsgrad=args.optim == 'amsgrad')
     
