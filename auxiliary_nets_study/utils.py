@@ -155,7 +155,7 @@ def optim_init(ncnn, model, lr, weight_decay, optimizer):
             layer_optim[n] = None
     return layer_optim, layer_lr
 
-def validate(val_loader, model, epoch, n, loss_sup):
+def validate(val_loader, model, epoch, n, loss_sup, iscuda):
     batch_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
@@ -166,8 +166,9 @@ def validate(val_loader, model, epoch, n, loss_sup):
     with torch.no_grad():
         total = 0
         for i, (input, target) in enumerate(val_loader):
-            target = target.cuda(non_blocking=True)
-            input = input.cuda(non_blocking=True)
+            if iscuda:
+                target = target.cuda(non_blocking=True)
+                input = input.cuda(non_blocking=True)
             input = torch.autograd.Variable(input)
             target = torch.autograd.Variable(target)
 

@@ -177,7 +177,7 @@ def main():
         for n in range(ncnn):
             ##### evaluate on validation set
             if layer_optim[n] is not None:
-                top1test = validate(val_loader, model, epoch, n, loss_sup)
+                top1test = validate(val_loader, model, epoch, n, args.loss_sup, args.cuda)
                 with open(name_log_txt, "a") as text_file:
                     print("n: {}, epoch {}, loss: {:.5f}, train top1:{} test top1:{} "
                           .format(n+1, epoch, losses[n].avg, top1[n].avg,top1test), file=text_file)
