@@ -433,8 +433,11 @@ class VGGn(nn.Module):
     '''
     def __init__(self, vgg_name, input_dim, input_ch, num_classes,
             feat_mult=1, dropout=0.0, nonlin="relu", no_similarity_std=False,
-            backprop=False, loss_sup="predsim", dim_in_decoder=2048):
+            backprop=False, loss_sup="predsim", dim_in_decoder=2048,
+            num_layers=0, num_hidden=1024):
         super(VGGn, self).__init__()
+        print(str(dropout), nonlin,no_similarity_std, backprop,
+                loss_sup,str(dim_in_decoder), str(num_layers), str(num_hidden))
         self.cfg = cfg[vgg_name]
         self.input_dim = input_dim
         self.input_ch = input_ch
@@ -451,8 +454,8 @@ class VGGn(nn.Module):
         for layer in self.cfg:
             if isinstance(layer, int):
                 output_ch = layer
-        if args.num_layers > 0: 
-            classifier = Net(args.num_layers, args.num_hidden, output_dim,
+        if num_layers > 0: 
+            classifier = Net(num_layers, num_hidden, output_dim,
                     int(output_ch * feat_mult), num_classes,
                     self.no_similarity_std, self.dropout, nonlin=nonlin)
             features.extend([*classifier.layers])

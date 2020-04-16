@@ -214,7 +214,8 @@ if args.model == 'mlp':
 elif args.model.startswith('vgg'):
     model = VGGn(args.model, input_dim, input_ch, num_classes, args.feat_mult,
             args.dropout, args.nonlin, args.no_similarity_std, args.backprop,
-            args.loss_sup, args.dim_in_decoder)
+            args.loss_sup, args.dim_in_decoder, args.num_layers,
+            args.num_hidden)
 else:
     print('No valid model defined')
 print(args.model, input_dim, input_ch, num_classes, args.feat_mult)
