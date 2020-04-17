@@ -129,8 +129,8 @@ def validate(val_loader, model, epoch, n, loss_sup, iscuda):
                 # measure accuracy and record loss
                 # measure elapsed time
             output, representation = model(representation, n=n)
-            if loss_sup == "predsim":
-               output = output[1]
+            #if loss_sup == "predsim":
+            output = output[1]
             if isinstance(model.main_cnn.blocks[n], nn.Linear):
                output = representation
 
