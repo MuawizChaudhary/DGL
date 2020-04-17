@@ -163,14 +163,14 @@ class Auxillery(nn.Module):
             if loss_sup == 'pred' or loss_sup == 'predsim':
                 self.decoder_y = nn.Linear(dim_in_decoder, num_classes)
                 self.decoder_y.weight.data.zero_()
-            if loss_sup == 'sim' or loss_sup == 'predsim':
+            if loss_sup == 'predsim':
                 self.sim_loss = nn.Conv2d(num_out, num_out, 3, stride=1, padding=1, bias=False)
         else:
             self.avg_pool = nn.Identity()
             if loss_sup == 'pred' or loss_sup == 'predsim':
                 self.decoder_y = nn.Linear(num_out, num_classes)
                 self.decoder_y.weight.data.zero_()
-            if loss_sup == 'sim' or loss_sup == 'predsim':
+            if loss_sup == 'predsim':
                 self.sim_loss = nn.Linear(num_out, num_out, bias=False)
 
     def forward(self, x):
