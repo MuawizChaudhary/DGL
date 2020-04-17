@@ -8,7 +8,7 @@ from bisect import bisect_right
 import itertools
 from models import DGL_Net, VGGn
 from settings import parse_args
-from utils import to_one_hot, dataset_load, AverageMeter, accuracy, lr_scheduler, loss_calc, optim_init, test, validate
+from utils import to_one_hot,  AverageMeter,  loss_calc, test, validate
 #import wandb
 import numpy as np
 np.random.seed(25)
