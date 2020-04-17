@@ -131,7 +131,6 @@ def validate(val_loader, model, epoch, n, loss_sup, iscuda):
             output, representation = model(representation, n=n)
             #if loss_sup == "predsim":
             output = output[1]
-            print(output)
             if isinstance(model.main_cnn.blocks[n], nn.Linear):
                output = representation
 
