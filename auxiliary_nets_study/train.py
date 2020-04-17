@@ -1,30 +1,23 @@
-from __future__ import print_function
 import argparse
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torchvision import datasets, transforms
-from torch.autograd import Variable
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
-import torch.distributed as dist
 import torch.utils.data
-from torchvision.datasets.cifar import CIFAR10
-from random import randint
-import datetime
-import itertools
 import time
-from models import auxillary_classifier2, DGL_Net, VGGn
+from bisect import bisect_right
+import itertools
+from models import DGL_Net, VGGn
 from settings import parse_args
-from utils import to_one_hot, similarity_matrix, dataset_load, \
-AverageMeter, accuracy, lr_scheduler, loss_calc, optim_init, test, validate
+from utils import to_one_hot, dataset_load, AverageMeter, accuracy, lr_scheduler, loss_calc, optim_init, test, validate
 #import wandb
 import numpy as np
 np.random.seed(25)
 import random
 random.seed(25)
 import sys
+
+import torch.optim as optim
+from torchvision import datasets, transforms
 
 import uuid
 filename = str(uuid.uuid4())
@@ -34,17 +27,87 @@ sha = repo.head.object.hexsha
 print(filename)
 sys.stdout = open(filename, "w",buffering=1)
 print(sha)
-print(" ".join(str(item) for item in sys.argv[1:]))
+print(" ".join(str(item) for item in sys.argv[0:]))
 
+# Training settings
+# dgl arguments
+parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
+parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+                    help='input batch size for training (default: 64)')
+parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
+                    help='input batch size for testing (default: 1000)')
+parser.add_argument('--epochs', type=int, default=400, metavar='N',
+                    help='number of epochs to train (default: 10)')
+parser.add_argument('--seed', type=int, default=25, metavar='S',
+                    help='random seed (default: 1)')
+parser.add_argument('--type_aux', type=str, default='mlp', metavar='N')
+parser.add_argument('--block_size', type=int, default=1, help='block size')
+parser.add_argument('--name', default='', type=str, help='name')
+parser.add_argument('--no-cuda', action='store_true', default=False,
+                    help='disables CUDA training')
+parser.add_argument('--lr', type=float, default=5e-4, help='block size')
+
+# localloss arguments
+parser.add_argument('--model', default='vgg8b',
+                    help='model, mlp, vgg13, vgg16, vgg19, vgg8b, vgg11b (default: vgg8b)')
+parser.add_argument('--num-layers', type=int, default=1,
+                    help='number of hidden fully-connected layers for mlp and vgg models (default: 1')
+parser.add_argument('--num-hidden', type=int, default=1024,
+                    help='number of hidden units for mpl model (default: 1024)')
+parser.add_argument('--dim-in-decoder', type=int, default=4096,
+                    help='input dimension of decoder_y used in pred and predsim loss (default: 4096)')
+parser.add_argument('--feat-mult', type=float, default=1,
+                    help='multiply number of CNN features with this number (default: 1)')
+parser.add_argument('--lr-decay-milestones', nargs='+', type=int, default=[200, 300, 350, 375],
+                    help='decay learning rate at these milestone epochs (default: [200,300,350,375])')
+parser.add_argument('--lr-decay-fact', type=float, default=0.25,
+                    help='learning rate decay factor to use at milestone epochs (default: 0.25)')
+parser.add_argument('--optim', default='adam',
+                    help='optimizer, adam, amsgrad or sgd (default: adam)')
+parser.add_argument('--momentum', type=float, default=0.0,
+                    help='SGD momentum (default: 0.0)')
+parser.add_argument('--weight-decay', type=float, default=0.0,
+                    help='weight decay (default: 0.0)')
+parser.add_argument('--beta', type=float, default=0.99,
+                    help='fraction of similarity matching loss in predsim loss (default: 0.99)')
+parser.add_argument('--dropout', type=float, default=0.0,
+                    help='dropout after each nonlinearity (default: 0.0)')
+parser.add_argument('--loss-sup', default='predsim',
+                    help='supervised local loss, sim or pred (default: predsim)')
+parser.add_argument('--nonlin', default='relu',
+                    help='nonlinearity, relu or leakyrelu (default: relu)')
+parser.add_argument('--no-similarity-std', action='store_true', default=False,
+                    help='disable use of standard deviation in similarity matrix for feature maps')
+
+
+
+args = parser.parse_args()
+args.cuda = not args.no_cuda and torch.cuda.is_available()
 
 ##################### Logs
+def lr_scheduler(lr, lr_decay_fact, lr_decay_milestones, epoch):
+    lr = lr * lr_decay_fact ** bisect_right(lr_decay_milestones, (epoch))
+    return lr
+
+def optim_init(ncnn, model, lr, weight_decay, optimizer):
+    layer_optim = [None] * ncnn
+    layer_lr = [lr] * ncnn
+    for n in range(ncnn):
+        to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
+        if len(list(to_train)) != 0:
+            to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
+            layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n], weight_decay=weight_decay, amsgrad=optimizer == 'amsgrad')
+        else:
+            layer_optim[n] = None
+    return layer_optim, layer_lr
+
+
 def main():
     global args, best_prec1
     args = parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     #wandb.init(config=args, project="dgl-refactored")
 
-    import git
     repo = git.Repo(search_parent_directories=True)
     sha = repo.head.object.hexsha
     print(sha)
@@ -53,22 +116,34 @@ def main():
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
             
-    torch.manual_seed(25)
+    torch.manual_seed(args.seed)
     if args.cuda:
-        torch.cuda.manual_seed(25)
+        torch.cuda.manual_seed(args.seed)
+
+    # data loader
+    train_transform = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.424, 0.415, 0.384), (0.283, 0.278, 0.284))
+    ])
+    dataset_train = datasets.CIFAR10('../data/CIFAR10', train=True, download=True, transform=train_transform)
+    train_loader = torch.utils.data.DataLoader(
+        dataset_train,
+        sampler=None,
+        batch_size=args.batch_size, shuffle=True)
+    test_loader = torch.utils.data.DataLoader(
+        datasets.CIFAR10('../data/CIFAR10', train=False,
+                         transform=transforms.Compose([
+                             transforms.ToTensor(),
+                             transforms.Normalize((0.424, 0.415, 0.384), (0.283, 0.278, 0.284))
+                         ])),
+        batch_size=args.batch_size, shuffle=False)
 
 
-    
-    kwargs={}
-    input_dim, input_ch, num_classes, train_transform, dataset_train,\
-    train_loader, test_loader = dataset_load(args.dataset, args.batch_size, kwargs)
-
-
-
-    if args.model == 'mlp':
-        model = Net(args.num_layers, args.num_hidden, input_dim, input_ch, num_classes)
-    elif args.model.startswith('vgg'):
-        model = VGGn(args.model, input_dim, input_ch, num_classes, args.feat_mult,
+    # Model
+    if args.model.startswith('vgg'):
+        model = VGGn(args.model, 32, 3, 10, args.feat_mult,
             args.dropout, args.nonlin, args.no_similarity_std, args.backprop,
             args.loss_sup, args.dim_in_decoder, args.num_layers,
             args.num_hidden)
@@ -79,88 +154,65 @@ def main():
 
     if args.cuda:
         model = model.cuda()
-    #wandb.watch(model)
     print(model)
-    
-    ncnn = len(model.main_cnn.blocks)
+
     n_cnn = len(model.main_cnn.blocks)
 
 
-    ############### Initialize all
-    if not args.backprop:
-        layer_optim, layer_lr = optim_init(ncnn, model, args.lr, args.weight_decay, args.optim)
-    else:
-        raise NotImplementedError
+    # Define optimizer en local lr
+    layer_optim, layer_lr = optim_init(n_cnn, model, args.lr, args.weight_decay, args.optim)
 
 ######################### Lets do the training
     for epoch in range(0, args.epochs+1):
         # Make sure we set the bn right
         model.train()
-
-        #For each epoch let's store each layer individually
-        batch_time = [AverageMeter() for _ in range(n_cnn)]
-        batch_time_total = AverageMeter()
-        data_time = AverageMeter()
-        losses = [AverageMeter() for _ in range(n_cnn)]
         top1 = [AverageMeter() for _ in range(n_cnn)]
 
 
-        for n in range(ncnn):
+        for n in range(n_cnn):
             layer_lr[n] = lr_scheduler(args.lr, args.lr_decay_fact, args.lr_decay_milestones, epoch-1)
             optimizer = layer_optim[n]
             if optimizer is not None: 
                 for param_group in optimizer.param_groups:
                     param_group['lr'] = layer_lr[n]
-        end = time.time()
 
         for i, (inputs, targets) in enumerate(train_loader):
-            # measure data loading time
-            #data_time.update(time.time() - end)
-
-
             if args.cuda:
                 targets = targets.cuda(non_blocking = True)
                 inputs = inputs.cuda(non_blocking = True)
 
-            #outputs_test(inputs[0], "outputs/train_tensor_" + str(i) + "_" + str(epoch))
             target_onehot = to_one_hot(targets)
             if args.cuda:
                 target_onehot = target_onehot.cuda()
 
 
-            #Main loop
             representation = inputs
-            end_all = time.time()
-            for n in range(ncnn):
-                end = time.time()
+            for n in range(n_cnn):
+
                 optimizer = layer_optim[n]
 
                 # Forward
-                if optimizer is not None:
+                if optimizer is not None: # some layers are just down-samplings for instance
                     optimizer.zero_grad()
 
                 outputs, representation = model(representation, n=n)
+
                 if optimizer is not None:
-                    if n == ncnn-1:
+                    if n == n_cnn-1: # if final layer, the representation is empty
                         outputs = representation
-                        loss = loss_calc(outputs, targets, target_onehot,
+                    loss = loss_calc(outputs, targets, target_onehot,
                             model.main_cnn.blocks[n], args.loss_sup, args.beta,
                             args.no_similarity_std)
-                    else:
-                        loss = loss_calc(outputs, targets, target_onehot,
-                            model.main_cnn.blocks[n], args.loss_sup, args.beta,
-                            args.no_similarity_std)
-                    #wandb.log({"Local Layer " + str(n)+ " Loss": loss.item()})
+
                     loss.backward()
                     optimizer.step()  
                     representation.detach_()
-                # measure accuracy and record loss
-                # measure elapsed time
-                batch_time[n].update(time.time() - end)
 
+
+        # We now log the statistics
         print('epoch: ' + str(epoch) + ' , lr : ' + str(lr_scheduler(args.lr, args.lr_decay_fact, args.lr_decay_milestones, epoch-1)))
         test(epoch, model, test_loader)
-        for n in range(ncnn):
+        for n in range(n_cnn):
             if layer_optim[n] is not None:
                 top1test = validate(test_loader, model, epoch, n, args.loss_sup, args.cuda)
                 print("n: {}, epoch {}, test top1:{} "
