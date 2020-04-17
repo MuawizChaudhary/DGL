@@ -12,6 +12,7 @@ def count_parameters(model):
     ''' Count number of parameters in model influenced by global loss. '''
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
+
 def to_one_hot(y, n_dims=None):
     ''' Take integer tensor y with n dims and convert it to 1-hot representation with n+1 dims. '''
     y_tensor = y.type(torch.LongTensor).view(-1, 1)
@@ -19,6 +20,7 @@ def to_one_hot(y, n_dims=None):
     y_one_hot = torch.zeros(y_tensor.size()[0], n_dims).scatter_(1, y_tensor, 1)
     y_one_hot = y_one_hot.view(*y.shape, -1)
     return y_one_hot
+
 
 def similarity_matrix(x, no_similarity_std):
     ''' Calculate adjusted cosine similarity matrix of size x.size(0) x x.size(0). '''
@@ -61,7 +63,8 @@ def dataset_load(dataset, batch_size, kwargs):
 
     else:
         print('No valid dataset is specified')
-    
+
+
 def allclose_test(output, epoch, index):
     path = "torch_tensor_" + str(epoch) + "_" + str(index) + ".pt"
     if os.path.exists(path):
@@ -71,6 +74,7 @@ def allclose_test(output, epoch, index):
             print("YOU MADE A MISTAKE")
     else:
         torch.save(output, path)
+
 
 def outputs_test(output, path):
     if os.path.exists(path):
@@ -84,27 +88,27 @@ def outputs_test(output, path):
 
 def loss_calc(outputs, y, y_onehot, module, loss_sup, beta, no_similarity_std):
     # Calculate supervised loss
+    if not isinstance(module, nn.Linear):
+        Rh, y_hat_local = outputs
+    else:
+        Rh = outputs
+        y_hat_local = outputs
+
     if loss_sup == 'sim':
         Ry = similarity_matrix(y_onehot).detach()
-        loss_sup = F.mse_loss(outputs, Ry)
+        loss_sup = F.mse_loss(Rh, Ry)
     elif loss_sup == 'pred':
-
-        loss_sup = F.cross_entropy(outputs,  y.detach())
+        loss_sup = F.cross_entropy(y_hat_local,  y.detach())
     elif loss_sup == 'predsim':
         if not isinstance(module, nn.Linear):
-            Rh, y_hat_local = outputs
             Ry = similarity_matrix(y_onehot, no_similarity_std).detach()
             loss_pred = (1-beta) * F.cross_entropy(y_hat_local,  y.detach())
             loss_sim = beta * F.mse_loss(Rh, Ry)
             loss_sup = loss_pred + loss_sim
         else:
-            y_hat_local = outputs
-            if type(y_hat_local) == tuple:
-                print("GGGJDD")
-                y_hat_local=y_hat_local[1]
-            print("GDDD")
-            loss_sup = (1-beta) * F.cross_entropy(y_hat_local,  y)#.detach())
+            loss_sup = (1-beta) * F.cross_entropy(y_hat_local,  y)
     return loss_sup
+
 
 #### Some helper functions
 class AverageMeter(object):
@@ -124,6 +128,7 @@ class AverageMeter(object):
         self.count += n
         self.avg = self.sum / self.count
 
+
 def accuracy(output, target, topk=(1,)):
     """Computes the precision@k for the specified values of k"""
     maxk = max(topk)
@@ -139,13 +144,16 @@ def accuracy(output, target, topk=(1,)):
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
+
 def lr_scheduler(lr, lr_decay_fact, lr_decay_milestones, epoch):
     lr = lr * lr_decay_fact ** bisect_right(lr_decay_milestones, (epoch))
     return lr
 
+
 def optim_init(ncnn, model, lr, weight_decay, optimizer):
     layer_optim = [None] * ncnn
     layer_lr = [lr] * ncnn
+
     for n in range(ncnn):
         to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
         if len(list(to_train)) != 0:
@@ -154,3 +162,5 @@ def optim_init(ncnn, model, lr, weight_decay, optimizer):
         else:
             layer_optim[n] = None
     return layer_optim, layer_lr
+
+
