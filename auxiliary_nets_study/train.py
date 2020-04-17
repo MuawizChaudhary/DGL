@@ -143,7 +143,7 @@ def main():
 
     # Model
     if args.model.startswith('vgg'):
-        model = VGGn(args.model, 32, 3, 10, args.feat_mult,
+        model = VGGn( 32, 3, 10, args.feat_mult,
             args.dropout, args.nonlin, args.no_similarity_std, args.backprop,
             args.loss_sup, args.dim_in_decoder, args.num_layers,
             args.num_hidden)
