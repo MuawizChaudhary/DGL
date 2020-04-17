@@ -25,6 +25,7 @@ class rep(nn.Module):
                 else:
                     x, x_return = self.forward(x,i,upto=False)
                     return x, x_return
+
         if isinstance(self.blocks[n], nn.MaxPool2d) or isinstance(self.blocks[n], nn.Linear):
             out = self.blocks[n](x)
             return out, out
@@ -54,6 +55,7 @@ class LocalLossBlockLinear(nn.Module):
         self.num_classes = num_classes
         self.first_layer = first_layer
         self.dropout_p = dropout
+
         encoder = nn.Linear(num_in, num_out, bias=True)
         
         bn = torch.nn.BatchNorm1d(num_out)
@@ -69,7 +71,6 @@ class LocalLossBlockLinear(nn.Module):
         
         if self.dropout_p > 0:
             self.dropout = torch.nn.Dropout(p=self.dropout_p, inplace=False)
-           
   
     def forward(self, x):        
         h = self.MLP(x)
@@ -104,6 +105,7 @@ class LocalLossBlockConv(nn.Module):
         self.num_classes = num_classes
         self.first_layer = first_layer
         self.dropout_p = dropout
+
         encoder = nn.Conv2d(ch_in, ch_out, kernel_size, stride=stride, padding=padding)
         
         bn = torch.nn.BatchNorm2d(ch_out)
@@ -172,6 +174,7 @@ class Auxillery(nn.Module):
     def forward(self, x):
         sim_output = None
         pred_output = None
+
         if self.loss_sup == 'sim':
             x_loss = self.sim_loss(x)
             sim_output = similarity_matrix(x_loss, self.no_similarity_std)
@@ -209,23 +212,27 @@ class Net(nn.Module):
 
         self.layers = nn.ModuleList([LocalLossBlockLinear(input_dim*input_dim*input_ch,
             num_hidden, num_classes, dropout=dropout, nonlin=nonlin, first_layer=True )])
-
+        
         self.auxillery_layers = nn.ModuleList([Auxillery("linear", num_hidden,
-            num_classes, num_hidden, no_similarity_std, loss_sup, dim_in_decoder)]) 
+            num_classes, num_hidden, no_similarity_std, loss_sup, dim_in_decoder)])
+        
+        for i in range(1, num_layers):
+            layer = LocalLossBlockLinear(int(num_hidden // (reduce_factor**(i-1))), 
+                    int(num_hidden // (reduce_factor**i)),
+                    num_classes, dropout=dropout, nonlin=nonlin)
+            self.layers.extend([layer])
 
-        self.layers.extend([LocalLossBlockLinear(int(num_hidden //
-            (reduce_factor**(i-1))), int(num_hidden // (reduce_factor**i)),
-            num_classes, dropout=dropout, nonlin=nonlin) for i in range(1, num_layers)])
-
-        self.auxillery_layers.extend([Auxillery("linear", int(num_hidden //
-            (reduce_factor**i)), num_classes, int(num_hidden //
-                (reduce_factor**i)), no_similarity_std, loss_sup, dim_in_decoder) for i in range(1, num_layers)])
+        for i in range(1, num_layers): 
+            aux = Auxillery("linear", int(num_hidden // (reduce_factor**i)),
+                    num_classes, int(num_hidden // (reduce_factor**i)),
+                    no_similarity_std, loss_sup, dim_in_decoder)
+            self.auxillery_layers.extend([aux])
 
         layer_out = nn.Linear(int(num_hidden //(reduce_factor**(num_layers-1))), num_classes)
         layer_out.weight.data.zero_()
         
         self.layers.extend([layer_out])
-        self.auxillery_layers.extend([nn.Identity(1)])
+        self.auxillery_layers.extend([nn.Identity()])
             
     def parameters(self):
         return self.layer_out.parameters()
@@ -311,26 +318,6 @@ class VGGn(nn.Module):
                 layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
                 auxillery_layers += [nn.Identity()]
                 scale_cum *=2
-            elif x == 'M3':
-                layers += [nn.MaxPool2d(kernel_size=3, stride=2, padding=1)]
-                auxillery_layers += [nn.Identity()]
-                scale_cum *=2
-            elif x == 'M4':
-                layers += [nn.MaxPool2d(kernel_size=4, stride=4)]
-                auxillery_layers += [nn.Identity()]
-                scale_cum *=4
-            elif x == 'A':
-                layers += [nn.AvgPool2d(kernel_size=2, stride=2)]
-                auxillery_layers += [nn.Identity()]
-                scale_cum *=2
-            elif x == 'A3':
-                layers += [nn.AvgPool2d(kernel_size=3, stride=2, padding=1)]
-                auxillery_layers += [nn.Identity()]
-                scale_cum *=2
-            elif x == 'A4':
-                layers += [nn.AvgPool2d(kernel_size=4, stride=4)]
-                auxillery_layers += [nn.Identity()]
-                scale_cum *=4
             else:
                 x = int(x * feat_mult)
                 if first_layer and input_dim > 64:
