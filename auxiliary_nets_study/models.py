@@ -206,7 +206,8 @@ class Net(nn.Module):
 
     def __init__(self, num_layers, num_hidden, input_dim, input_ch,
                  num_classes, no_similarity_std, dropout=0.0, nonlin='relu',
-                 loss_sup="predsim", dim_in_decoder=2048):
+                 loss_sup="predsim", dim_in_decoder=2048, 
+                 aux_type="nokland", mlp_layers=0):
         super(Net, self).__init__()
 
         self.num_hidden = num_hidden
@@ -216,10 +217,16 @@ class Net(nn.Module):
         self.layers = nn.ModuleList([LocalLossBlockLinear(input_dim * input_dim * input_ch,
                                                           num_hidden, num_classes, dropout=dropout, nonlin=nonlin,
                                                           first_layer=True)])
-
-        self.auxillery_layers = nn.ModuleList([Auxillery("linear", num_hidden,
-                                                         num_classes, num_hidden, no_similarity_std, loss_sup,
-                                                         dim_in_decoder)])
+        if aux_type == "dgl":
+            self.auxillery_layers = nn.ModuleList([auxillary_classifier2(num_hidden,
+                input_dim, cnn=False,
+                num_classes=num_classes, n_lin=0,
+                mlp_layers=mlp_layers, block="linear")])
+        else:
+            self.auxillery_layers = nn.ModuleList([Auxillery("linear", num_hidden,
+                num_classes, num_hidden,
+                no_similarity_std, loss_sup,
+                dim_in_decoder)])
 
         for i in range(1, num_layers):
             layer = LocalLossBlockLinear(int(num_hidden // (reduce_factor ** (i - 1))),
@@ -227,6 +234,7 @@ class Net(nn.Module):
                                          num_classes, dropout=dropout, nonlin=nonlin)
             self.layers.extend([layer])
 
+        #TODO add option for aux_type here
         for i in range(1, num_layers):
             aux = Auxillery("linear", int(num_hidden // (reduce_factor ** i)),
                             num_classes, int(num_hidden // (reduce_factor ** i)),
@@ -273,7 +281,8 @@ class VGGn(nn.Module):
     def __init__(self, vggname, input_dim=32, input_ch=3, num_classes=10,
                  feat_mult=1, dropout=0.0, nonlin="relu", no_similarity_std=False,
                  loss_sup="predsim", dim_in_decoder=2048,
-                 num_layers=0, num_hidden=1024):
+                 num_layers=0, num_hidden=1024,
+                 aux_type="nokland", mlp_layers=0):
         super(VGGn, self).__init__()
         self.cfg = cfg[vggname]
         self.input_dim = input_dim
@@ -284,6 +293,8 @@ class VGGn(nn.Module):
         self.nonlin = nonlin
         self.loss_sup = loss_sup
         self.dim_in_decoder = dim_in_decoder
+        self.aux_type = aux_type
+        self.mlp_layers = mlp_layers
 
         features, auxillery_layers, output_dim = self._make_layers(self.cfg, input_ch, input_dim, feat_mult)
 
@@ -294,14 +305,14 @@ class VGGn(nn.Module):
             classifier = Net(num_layers, num_hidden, output_dim,
                              int(output_ch * feat_mult), num_classes,
                              self.no_similarity_std, self.dropout, nonlin=nonlin,
-                             loss_sup=loss_sup,
-                             dim_in_decoder=dim_in_decoder)
+                             loss_sup=loss_sup, dim_in_decoder=dim_in_decoder,
+                             aux_type=aux_type, mlp_layers=mlp_layers)
             features.extend([*classifier.layers])
             auxillery_layers.extend([*classifier.auxillery_layers])
         else:
             classifier = nn.Linear(output_dim * output_dim * int(output_ch * feat_mult), num_classes)
             features.append(classifier)
-            auxillery_layers.append(nn.Identity(1))
+            auxillery_layers.append(nn.Identity())
 
         self.main_cnn = rep(nn.ModuleList(features))
         self.auxillary_nets = nn.ModuleList(auxillery_layers)
@@ -332,7 +343,12 @@ class VGGn(nn.Module):
                                                   nonlin=self.nonlin,
                                                   first_layer=first_layer)]
 
-                    auxillery_layers += [Auxillery("conv", input_dim // scale_cum,
+                    if self.aux_type == 'dgl':
+                        auxillery_layers += [auxillary_classifier2(x, input_dim // scale_cum,
+                                cnn=False, num_classes=self.num_classes,
+                                n_lin=0, mlp_layers=self.mlp_layers)]
+                    else:
+                        auxillery_layers += [Auxillery("conv", input_dim // scale_cum,
                                                    self.num_classes, x, self.no_similarity_std,
                                                    self.loss_sup, self.dim_in_decoder)]
                 else:
@@ -343,7 +359,12 @@ class VGGn(nn.Module):
                                                   nonlin=self.nonlin,
                                                   first_layer=first_layer)]
 
-                    auxillery_layers += [Auxillery("conv", input_dim // scale_cum,
+                    if self.aux_type == 'dgl':
+                        auxillery_layers += [auxillary_classifier2(x, input_dim // scale_cum,
+                                cnn=False, num_classes=self.num_classes,
+                                n_lin=0, mlp_layers=self.mlp_layers)]
+                    else:
+                        auxillery_layers += [Auxillery("conv", input_dim // scale_cum,
                                                    self.num_classes, x, self.no_similarity_std,
                                                    self.loss_sup, self.dim_in_decoder)]
 
@@ -357,7 +378,6 @@ class DGL_Net(nn.Module):
     def __init__(self, depth=8, num_classes=10, aux_type='mlp', block_size=1,
                  feature_size=128, downsample=None, dropout_p=0.2):
         super(DGL_Net, self).__init__()
-        print(aux_type)
         if aux_type == 'mlp':
             nlin = 0;
             mlp_layers = 0;
@@ -445,12 +465,13 @@ class DGL_Net(nn.Module):
 
 class auxillary_classifier2(nn.Module):
     def __init__(self, input_features=256, in_size=32, cnn=False,
-                 num_classes=10, n_lin=0, mlp_layers=0):
+                 num_classes=10, n_lin=0, mlp_layers=0, block="conv"):
         super(auxillary_classifier2, self).__init__()
         self.n_lin = n_lin
         self.in_size = in_size
         self.cnn = cnn
         feature_size = input_features
+        self.block = block
         self.blocks = []
         # TODO make argument
         # self.dropout_p = 0.2
@@ -494,19 +515,24 @@ class auxillary_classifier2(nn.Module):
 
                 layers += [nn.Linear(in_feat, mlp_feat),
                            bn_temp, nn.ReLU(True)]
+
             layers += [nn.Linear(mlp_feat, num_classes)]
             self.classifier = nn.Sequential(*layers)
             self.mlp = True
 
         else:
             self.mlp = False
-            self.classifier = nn.Linear(feature_size * 4, num_classes)
+            if block != "linear":
+                self.classifier = nn.Linear(feature_size*4, num_classes)
+            else:
+                self.classifier = nn.Linear(feature_size, num_classes)
+
 
     def forward(self, x):
         if type(x) is tuple:
             x = x[1]
         out = x
-        if not self.cnn:
+        if not self.cnn and self.block != "linear":
             # First reduce the size by 16
             out = F.adaptive_avg_pool2d(out, (math.ceil(self.in_size / 4), math.ceil(self.in_size / 4)))
 
@@ -514,11 +540,11 @@ class auxillary_classifier2(nn.Module):
             out = self.blocks[n](out)
             # out = self.relu(out)
             # out = self.dropout(out)
+        if self.block != "linear":
+            out = self.adaptive_avg_pool(out)
 
-        out = self.adaptive_avg_pool(out)
-
-        if not self.mlp:
+        if not self.mlp and self.block != "linear":
             out = self.bn(out)
         out = out.view(out.size(0), -1)
         out = self.classifier(out)
-        return out
+        return (None, out)

@@ -78,6 +78,10 @@ parser.add_argument('--nonlin', default='relu',
                     help='nonlinearity, relu or leakyrelu (default: relu)')
 parser.add_argument('--no-similarity-std', action='store_true', default=False,
                     help='disable use of standard deviation in similarity matrix for feature maps')
+parser.add_argument('--aux-type', default='nokland',
+                    help='nonlinearity, relu or leakyrelu (default: relu)')
+parser.add_argument('--mlp-layers', type=int, default=0,
+                    help='number of hidden fully-connected layers for mlp and vgg models (default: 1')
 
 
 
@@ -104,8 +108,6 @@ def optim_init(ncnn, model, lr, weight_decay, optimizer):
 
 def main():
     global args, best_prec1
-    args = parse_args()
-    args.cuda = not args.no_cuda and torch.cuda.is_available()
     #wandb.init(config=args, project="dgl-refactored")
 
     repo = git.Repo(search_parent_directories=True)
@@ -145,7 +147,8 @@ def main():
     if args.model.startswith('vgg'):
         model = VGGn( args.model, feat_mult=args.feat_mult, dropout=args.dropout,nonlin=args.nonlin, no_similarity_std=args.no_similarity_std,
                       loss_sup= args.loss_sup, dim_in_decoder=args.dim_in_decoder, num_layers=args.num_layers,
-            num_hidden = args.num_hidden)
+            num_hidden = args.num_hidden, aux_type=args.aux_type,
+            mlp_layers=args.mlp_layers)
     elif args.model == 'dgl':
         DGL_Net(aux_type=args.type_aux, block_size=args.block_size)
     else:
