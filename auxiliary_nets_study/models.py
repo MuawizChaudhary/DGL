@@ -270,7 +270,7 @@ class VGGn(nn.Module):
         feat_mult (float): Multiply number of feature maps with this number.
     '''
 
-    def __init__(self, input_dim, input_ch, num_classes,
+    def __init__(self, input_dim=32, input_ch=3, num_classes=10,
                  feat_mult=1, dropout=0.0, nonlin="relu", no_similarity_std=False,
                  loss_sup="predsim", dim_in_decoder=2048,
                  num_layers=0, num_hidden=1024):

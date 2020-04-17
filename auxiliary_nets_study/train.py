@@ -143,10 +143,9 @@ def main():
 
     # Model
     if args.model.startswith('vgg'):
-        model = VGGn( 32, 3, 10, args.feat_mult,
-            args.dropout, args.nonlin, args.no_similarity_std, args.backprop,
-            args.loss_sup, args.dim_in_decoder, args.num_layers,
-            args.num_hidden)
+        model = VGGn( feat_mult=args.feat_mult, dropout=args.dropout,nonlin=args.nonlin, no_similarity_std=args.no_similarity_std,
+                      loss_sup= args.loss_sup, dim_in_decoder=args.dim_in_decoder, num_layers=args.num_layers,
+            num_hidden = args.num_hidden)
     elif args.model == 'dgl':
         DGL_Net(aux_type=args.type_aux, block_size=args.block_size)
     else:
