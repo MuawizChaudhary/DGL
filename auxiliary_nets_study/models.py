@@ -275,6 +275,7 @@ class VGGn(nn.Module):
                  loss_sup="predsim", dim_in_decoder=2048,
                  num_layers=0, num_hidden=1024):
         super(VGGn, self).__init__()
+        self.cfg = cfg
         self.input_dim = input_dim
         self.input_ch = input_ch
         self.num_classes = num_classes
