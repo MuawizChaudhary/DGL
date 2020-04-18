@@ -25,7 +25,7 @@ def similarity_matrix(x, no_similarity_std):
     return R
 
 def loss_calc(outputs, y, y_onehot, module, loss_sup, beta, no_similarity_std):
-    if not isinstance(module, nn.Linear):
+    if not isinstance(module, nn.Linear) and type(outputs) == tuple:
         Rh, y_hat_local = outputs
     else:
         Rh = outputs
@@ -130,7 +130,9 @@ def validate(val_loader, model, epoch, n, loss_sup, iscuda):
                 # measure elapsed time
             output, representation = model(representation, n=n)
             #if loss_sup == "predsim":
-            output = output[1]
+            #output = output[1]
+            if isinstance(output, tuple):
+                output = output[1]
             if isinstance(model.main_cnn.blocks[n], nn.Linear):
                output = representation
 

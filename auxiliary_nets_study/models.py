@@ -207,7 +207,7 @@ class Net(nn.Module):
     def __init__(self, num_layers, num_hidden, input_dim, input_ch,
                  num_classes, no_similarity_std, dropout=0.0, nonlin='relu',
                  loss_sup="predsim", dim_in_decoder=2048, 
-                 aux_type="nokland", mlp_layers=0):
+                 aux_type="nokland", mlp_layers=0, nlin=0):
         super(Net, self).__init__()
 
         self.num_hidden = num_hidden
@@ -220,7 +220,7 @@ class Net(nn.Module):
         if aux_type == "dgl":
             self.auxillery_layers = nn.ModuleList([auxillary_classifier2(num_hidden,
                 input_dim, cnn=False,
-                num_classes=num_classes, n_lin=0,
+                num_classes=num_classes, nlin=nlin,
                 mlp_layers=mlp_layers, block="linear")])
         else:
             self.auxillery_layers = nn.ModuleList([Auxillery("linear", num_hidden,
@@ -282,7 +282,8 @@ class VGGn(nn.Module):
                  feat_mult=1, dropout=0.0, nonlin="relu", no_similarity_std=False,
                  loss_sup="predsim", dim_in_decoder=2048,
                  num_layers=0, num_hidden=1024,
-                 aux_type="nokland", mlp_layers=0):
+                 aux_type="nokland", mlp_layers=0,
+                 nlin=0):
         super(VGGn, self).__init__()
         self.cfg = cfg[vggname]
         self.input_dim = input_dim
@@ -295,6 +296,7 @@ class VGGn(nn.Module):
         self.dim_in_decoder = dim_in_decoder
         self.aux_type = aux_type
         self.mlp_layers = mlp_layers
+        self.nlin = nlin
 
         features, auxillery_layers, output_dim = self._make_layers(self.cfg, input_ch, input_dim, feat_mult)
 
@@ -306,7 +308,8 @@ class VGGn(nn.Module):
                              int(output_ch * feat_mult), num_classes,
                              self.no_similarity_std, self.dropout, nonlin=nonlin,
                              loss_sup=loss_sup, dim_in_decoder=dim_in_decoder,
-                             aux_type=aux_type, mlp_layers=mlp_layers)
+                             aux_type=aux_type, mlp_layers=mlp_layers,
+                             nlin=nlin)
             features.extend([*classifier.layers])
             auxillery_layers.extend([*classifier.auxillery_layers])
         else:
@@ -346,7 +349,8 @@ class VGGn(nn.Module):
                     if self.aux_type == 'dgl':
                         auxillery_layers += [auxillary_classifier2(x, input_dim // scale_cum,
                                 cnn=False, num_classes=self.num_classes,
-                                n_lin=0, mlp_layers=self.mlp_layers)]
+                                mlp_layers=self.mlp_layers,
+                                nlin=self.nlin)]
                     else:
                         auxillery_layers += [Auxillery("conv", input_dim // scale_cum,
                                                    self.num_classes, x, self.no_similarity_std,
@@ -362,7 +366,8 @@ class VGGn(nn.Module):
                     if self.aux_type == 'dgl':
                         auxillery_layers += [auxillary_classifier2(x, input_dim // scale_cum,
                                 cnn=False, num_classes=self.num_classes,
-                                n_lin=0, mlp_layers=self.mlp_layers)]
+                                mlp_layers=self.mlp_layers,
+                                nlin=self.nlin)]
                     else:
                         auxillery_layers += [Auxillery("conv", input_dim // scale_cum,
                                                    self.num_classes, x, self.no_similarity_std,
@@ -465,9 +470,9 @@ class DGL_Net(nn.Module):
 
 class auxillary_classifier2(nn.Module):
     def __init__(self, input_features=256, in_size=32, cnn=False,
-                 num_classes=10, n_lin=0, mlp_layers=0, block="conv"):
+                 num_classes=10, nlin=0, mlp_layers=0, block="conv"):
         super(auxillary_classifier2, self).__init__()
-        self.n_lin = n_lin
+        self.nlin = nlin
         self.in_size = in_size
         self.cnn = cnn
         feature_size = input_features
@@ -478,22 +483,24 @@ class auxillary_classifier2(nn.Module):
         # self.dropout = torch.nn.Dropout2d(p=self.dropout_p, inplace=False)
 
 
-        for n in range(self.n_lin):
-            if n == 0:
-                input_features = input_features
-            else:
-                input_features = feature_size
+        if block == "conv":
+            for n in range(self.nlin):
+                if n == 0:
+                    input_features = input_features
+                else:
+                    input_features = feature_size
 
-            bn_temp = nn.BatchNorm2d(feature_size)
+                bn_temp = nn.BatchNorm2d(feature_size)
+                relu_temp = nn.ReLU(True)
 
-            if cnn:
-                conv = nn.Conv2d(input_features, feature_size,
-                                 kernel_size=3, stride=1, padding=1, bias=False)
-            else:
-                conv = nn.Conv2d(input_features, feature_size,
-                                 kernel_size=1, stride=1, padding=0, bias=False)
+                if cnn:
+                    conv = nn.Conv2d(input_features, feature_size,
+                                     kernel_size=3, stride=1, padding=1, bias=False)
+                else:
+                    conv = nn.Conv2d(input_features, feature_size,
+                                     kernel_size=1, stride=1, padding=0, bias=False)
 
-            self.blocks.append(nn.Sequential(conv, bn_temp))
+                self.blocks.append(nn.Sequential(conv, bn_temp, relu_temp))
 
         self.blocks = nn.ModuleList(self.blocks)
 
@@ -539,10 +546,10 @@ class auxillary_classifier2(nn.Module):
             # First reduce the size by 16
             out = F.adaptive_avg_pool2d(out, (math.ceil(self.in_size / 4), math.ceil(self.in_size / 4)))
 
-        for n in range(self.n_lin):
-            out = self.blocks[n](out)
-            # out = self.relu(out)
-            # out = self.dropout(out)
+        if self.block == "conv":
+            for n in range(self.nlin):
+                out = self.blocks[n](out)
+                #out = self.dropout(out)
         if self.block == "conv":
             out = self.adaptive_avg_pool(out)
 

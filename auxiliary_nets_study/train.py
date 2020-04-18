@@ -9,6 +9,7 @@ import itertools
 from models import DGL_Net, VGGn
 from settings import parse_args
 from utils import to_one_hot,  AverageMeter,  loss_calc, test, validate
+from resnet import resnet18, resnet34, resnet50, resnet101, resnet152
 #import wandb
 import numpy as np
 np.random.seed(25)
@@ -84,6 +85,9 @@ parser.add_argument('--mlp-layers', type=int, default=0,
                     help='number of hidden fully-connected layers for mlp and vgg models (default: 1')
 parser.add_argument('--lr-decay-epoch', type=int, default=80,
                     help='epoch to decay sgd learning rate (default: 80)')
+parser.add_argument('--nlin',  default=3,type=int,
+                    help='number of conv layers in aux classifiers')
+
 
 
 
@@ -156,12 +160,27 @@ def main():
 
     # Model
     if args.model.startswith('vgg'):
-        model = VGGn( args.model, feat_mult=args.feat_mult, dropout=args.dropout,nonlin=args.nonlin, no_similarity_std=args.no_similarity_std,
+        model = VGGn(args.model, feat_mult=args.feat_mult, dropout=args.dropout,nonlin=args.nonlin, no_similarity_std=args.no_similarity_std,
                       loss_sup= args.loss_sup, dim_in_decoder=args.dim_in_decoder, num_layers=args.num_layers,
             num_hidden = args.num_hidden, aux_type=args.aux_type,
-            mlp_layers=args.mlp_layers)
+            mlp_layers=args.mlp_layers, nlin=args.nlin)
     elif args.model == 'dgl':
         DGL_Net(aux_type=args.type_aux, block_size=args.block_size)
+    elif args.model == 'resnet18':
+        model = resnet18(nlin=args.nlin, mlp=args.mlp_layers,
+                                       block_size=args.block_size)
+    elif args.model == 'resnet34':
+        model = resnet34(nlin=args.nlin, mlp=args.mlp_layers,
+                                       block_size=args.block_size)
+    elif args.model == 'resnet50':
+        model = resnet50(nlin=args.nlin, mlp=args.mlp_layers,
+                                       block_size=args.block_size)
+    elif args.model == 'resnet101':
+        model = resnet101(nlin=args.nlin, mlp=args.mlp_layers,
+                                       block_size=args.block_size)
+    elif args.model == 'resnet152':
+        model = resnet152(nlin=args.nlin, mlp=args.mlp_layers,
+                                       block_size=args.block_size)
     else:
         print('No valid model defined')
 
@@ -201,7 +220,6 @@ def main():
 
             representation = inputs
             for n in range(n_cnn):
-
                 optimizer = layer_optim[n]
 
                 # Forward
@@ -211,7 +229,7 @@ def main():
                 outputs, representation = model(representation, n=n)
 
                 if optimizer is not None:
-                    if n == n_cnn-1: # if final layer, the representation is empty
+                    if isinstance(model.main_cnn.blocks[n], torch.nn.Linear): # if final layer, the representation is empty
                         outputs = representation
                     loss = loss_calc(outputs, targets, target_onehot,
                             model.main_cnn.blocks[n], args.loss_sup, args.beta,
