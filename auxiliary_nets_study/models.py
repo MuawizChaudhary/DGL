@@ -492,37 +492,40 @@ class auxillary_classifier2(nn.Module):
             else:
                 conv = nn.Conv2d(input_features, feature_size,
                                  kernel_size=1, stride=1, padding=0, bias=False)
+
             self.blocks.append(nn.Sequential(conv, bn_temp))
 
         self.blocks = nn.ModuleList(self.blocks)
-        # self.relu = nn.ReLU()
-        self.adaptive_avg_pool = nn.AdaptiveAvgPool2d((2, 2))
-        self.bn = nn.BatchNorm2d(feature_size)
+
+        if block == "conv":
+            self.adaptive_avg_pool = nn.AdaptiveAvgPool2d((2, 2))
+            self.bn = nn.BatchNorm2d(feature_size)
 
         if mlp_layers > 0:
+            if block == "conv":
+                mlp_feat = feature_size * (2) * (2)
+            else:
+                mlp_feat = feature_size
 
-            mlp_feat = feature_size * (2) * (2)
             layers = []
 
             for l in range(mlp_layers):
-                if l == 0:
+                if l == 0 and block == "conv":
                     in_feat = feature_size * 4
                     mlp_feat = mlp_feat
                 else:
                     in_feat = mlp_feat
 
                 bn_temp = nn.BatchNorm1d(mlp_feat)
-
                 layers += [nn.Linear(in_feat, mlp_feat),
                            bn_temp, nn.ReLU(True)]
 
             layers += [nn.Linear(mlp_feat, num_classes)]
             self.classifier = nn.Sequential(*layers)
             self.mlp = True
-
         else:
             self.mlp = False
-            if block != "linear":
+            if block == "conv":
                 self.classifier = nn.Linear(feature_size*4, num_classes)
             else:
                 self.classifier = nn.Linear(feature_size, num_classes)
@@ -532,7 +535,7 @@ class auxillary_classifier2(nn.Module):
         if type(x) is tuple:
             x = x[1]
         out = x
-        if not self.cnn and self.block != "linear":
+        if not self.cnn and self.block == "conv":
             # First reduce the size by 16
             out = F.adaptive_avg_pool2d(out, (math.ceil(self.in_size / 4), math.ceil(self.in_size / 4)))
 
@@ -540,10 +543,10 @@ class auxillary_classifier2(nn.Module):
             out = self.blocks[n](out)
             # out = self.relu(out)
             # out = self.dropout(out)
-        if self.block != "linear":
+        if self.block == "conv":
             out = self.adaptive_avg_pool(out)
 
-        if not self.mlp and self.block != "linear":
+        if not self.mlp and self.block == "conv":
             out = self.bn(out)
         out = out.view(out.size(0), -1)
         out = self.classifier(out)
