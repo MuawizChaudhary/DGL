@@ -10,7 +10,7 @@ from models import DGL_Net, VGGn
 from settings import parse_args
 from utils import to_one_hot,  AverageMeter,  loss_calc, test, validate
 from resnet import resnet18, resnet34, resnet50, resnet101, resnet152
-#import wandb
+import wandb
 import numpy as np
 np.random.seed(25)
 import random
@@ -19,16 +19,6 @@ import sys
 
 import torch.optim as optim
 from torchvision import datasets, transforms
-
-import uuid
-filename = str(uuid.uuid4())
-import git
-repo = git.Repo(search_parent_directories=True)
-sha = repo.head.object.hexsha
-print(filename)
-sys.stdout = open(filename, "w",buffering=1)
-print(sha)
-print(" ".join(str(item) for item in sys.argv[0:]))
 
 # Training settings
 # dgl arguments
@@ -94,6 +84,21 @@ parser.add_argument('--nlin',  default=3,type=int,
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
+wandb.init(config=args, project="dgl-refactored")
+import uuid
+filename = str(uuid.uuid4())
+import git
+repo = git.Repo(search_parent_directories=True)
+sha = repo.head.object.hexsha
+print(filename)
+sys.stdout = open(filename, "w",buffering=1)
+print(sha)
+print(" ".join(str(item) for item in sys.argv[0:]))
+print(filename)
+
+
+
+
 ##################### Logs
 def lr_scheduler(lr, epoch, args):
     if args.optim == "adam":
@@ -123,7 +128,6 @@ def optim_init(ncnn, model, lr, weight_decay, optimizer):
 
 def main():
     global args, best_prec1
-    #wandb.init(config=args, project="dgl-refactored")
 
     repo = git.Repo(search_parent_directories=True)
     sha = repo.head.object.hexsha
@@ -186,6 +190,7 @@ def main():
 
     if args.cuda:
         model = model.cuda()
+    wandb.watch(model)
     print(model)
 
     n_cnn = len(model.main_cnn.blocks)

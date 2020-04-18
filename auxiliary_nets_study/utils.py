@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import os
+import wandb
 
 def to_one_hot(y, n_dims=None):
     ''' Take integer tensor y with n dims and convert it to 1-hot representation with n+1 dims. '''
@@ -112,6 +113,7 @@ def test(epoch, model, test_loader, cuda=True,num_classes=10):
 
 
 def validate(val_loader, model, epoch, n, loss_sup, iscuda):
+    losses = AverageMeter()
     top1 = AverageMeter()
 
     model.eval()
@@ -137,8 +139,13 @@ def validate(val_loader, model, epoch, n, loss_sup, iscuda):
                output = representation
 
             # measure accuracy and record loss
+            loss = F.cross_entropy(output, target)
+
             prec1 = accuracy(output.data, target)
+            losses.update(float(loss.item()), float(input.size(0)))
             top1.update(float(prec1[0]), float(input.size(0)))
 
             total += input.size(0)
+        wandb.log({"Layer " + str(n) + " test loss": losses.avg})
+        wandb.log({"Layer " + str(n) + " top1": top1.avg})
     return top1.avg
