@@ -111,7 +111,7 @@ def optim_init(ncnn, model, lr, weight_decay, optimizer):
             if args.optim == "adam":
                 layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n], weight_decay=weight_decay, amsgrad=optimizer == 'amsgrad')
             elif args.optim == "sgd":
-                layer_optim[n] = optim.SGD(to_train, lr=layer_lr[n], weight_decay=weight_decay)
+                layer_optim[n] = optim.SGD(to_train, lr=layer_lr[n], momentum=0.9, weight_decay=weight_decay)
         else:
             layer_optim[n] = None
     return layer_optim, layer_lr
