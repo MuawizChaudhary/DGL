@@ -188,9 +188,9 @@ def main():
     else:
         print('No valid model defined')
 
+    #wandb.watch(model)
     if args.cuda:
         model = model.cuda()
-    wandb.watch(model)
     print(model)
 
     n_cnn = len(model.main_cnn.blocks)
@@ -204,6 +204,7 @@ def main():
         # Make sure we set the bn right
         model.train()
         top1 = [AverageMeter() for _ in range(n_cnn)]
+        losses = [AverageMeter() for _ in range(n_cnn)]
 
 
         for n in range(n_cnn):
@@ -243,10 +244,15 @@ def main():
                     loss.backward()
                     optimizer.step()  
                     representation.detach_()
+                    losses[n].update(float(loss.item()), float(targets.size(0)))
+
 
 
         # We now log the statistics
         print('epoch: ' + str(epoch) + ' , lr: ' + str(lr_scheduler(layer_lr[-1], epoch-1, args)))
+        for n in range(n_cnn):
+            wandb.log({"Layer " + str(n) + " test loss": losses[n].avg})
+            
         test(epoch, model, test_loader)
         for n in range(n_cnn):
             if layer_optim[n] is not None:
