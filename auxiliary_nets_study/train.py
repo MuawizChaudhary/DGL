@@ -82,6 +82,8 @@ parser.add_argument('--aux-type', default='nokland',
                     help='nonlinearity, relu or leakyrelu (default: relu)')
 parser.add_argument('--mlp-layers', type=int, default=0,
                     help='number of hidden fully-connected layers for mlp and vgg models (default: 1')
+parser.add_argument('--lr-decay-epoch', type=int, default=80,
+                    help='epoch to decay sgd learning rate (default: 80)')
 
 
 
@@ -89,8 +91,14 @@ args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
 ##################### Logs
-def lr_scheduler(lr, lr_decay_fact, lr_decay_milestones, epoch):
-    lr = lr * lr_decay_fact ** bisect_right(lr_decay_milestones, (epoch))
+def lr_scheduler(lr, epoch, args):
+    if args.optim == "adam":
+        lr = lr * args.lr_decay_fact ** bisect_right(args.lr_decay_milestones, (epoch))
+    elif args.optim == "sgd":
+        if (epoch+2) % args.lr_decay_epoch == 0:
+            lr = lr * args.lr_decay_fact
+        else:
+            lr = lr
     return lr
 
 def optim_init(ncnn, model, lr, weight_decay, optimizer):
@@ -100,7 +108,10 @@ def optim_init(ncnn, model, lr, weight_decay, optimizer):
         to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
         if len(list(to_train)) != 0:
             to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
-            layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n], weight_decay=weight_decay, amsgrad=optimizer == 'amsgrad')
+            if args.optim == "adam":
+                layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n], weight_decay=weight_decay, amsgrad=optimizer == 'amsgrad')
+            elif args.optim == "sgd":
+                layer_optim[n] = optim.SGD(to_train, lr=layer_lr[n], weight_decay=weight_decay)
         else:
             layer_optim[n] = None
     return layer_optim, layer_lr
@@ -172,7 +183,7 @@ def main():
 
 
         for n in range(n_cnn):
-            layer_lr[n] = lr_scheduler(args.lr, args.lr_decay_fact, args.lr_decay_milestones, epoch-1)
+            layer_lr[n] = lr_scheduler(layer_lr[n], epoch-1, args)
             optimizer = layer_optim[n]
             if optimizer is not None: 
                 for param_group in optimizer.param_groups:
@@ -212,7 +223,7 @@ def main():
 
 
         # We now log the statistics
-        print('epoch: ' + str(epoch) + ' , lr : ' + str(lr_scheduler(args.lr, args.lr_decay_fact, args.lr_decay_milestones, epoch-1)))
+        print('epoch: ' + str(epoch) + ' , lr: ' + str(lr_scheduler(layer_lr[-1], epoch-1, args)))
         test(epoch, model, test_loader)
         for n in range(n_cnn):
             if layer_optim[n] is not None:
