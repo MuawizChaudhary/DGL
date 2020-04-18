@@ -146,6 +146,6 @@ def validate(val_loader, model, epoch, n, loss_sup, iscuda):
             top1.update(float(prec1[0]), float(input.size(0)))
 
             total += input.size(0)
-        wandb.log({"Layer " + str(n) + " test loss": losses.avg})
-        wandb.log({"Layer " + str(n) + " top1": top1.avg})
+        wandb.log({"Layer " + str(n) + " test loss": losses.avg}, step=epoch)
+        wandb.log({"Layer " + str(n) + " top1": top1.avg}, step=epoch)
     return top1.avg
