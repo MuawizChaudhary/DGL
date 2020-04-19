@@ -221,7 +221,7 @@ class Net(nn.Module):
             self.auxillery_layers = nn.ModuleList([auxillary_classifier2(num_hidden,
                 input_dim, cnn=False,
                 num_classes=num_classes, nlin=nlin,
-                mlp_layers=mlp_layers, block="linear")])
+                mlp_layers=mlp_layers, block="linear", loss_sup=loss_sup)])
         else:
             self.auxillery_layers = nn.ModuleList([Auxillery("linear", num_hidden,
                 num_classes, num_hidden,
@@ -350,7 +350,7 @@ class VGGn(nn.Module):
                         auxillery_layers += [auxillary_classifier2(x, input_dim // scale_cum,
                                 cnn=False, num_classes=self.num_classes,
                                 mlp_layers=self.mlp_layers,
-                                nlin=self.nlin)]
+                                nlin=self.nlin, loss_sup=self.loss_sup)]
                     else:
                         auxillery_layers += [Auxillery("conv", input_dim // scale_cum,
                                                    self.num_classes, x, self.no_similarity_std,
@@ -367,7 +367,7 @@ class VGGn(nn.Module):
                         auxillery_layers += [auxillary_classifier2(x, input_dim // scale_cum,
                                 cnn=False, num_classes=self.num_classes,
                                 mlp_layers=self.mlp_layers,
-                                nlin=self.nlin)]
+                                nlin=self.nlin, loss_sup=self.loss_sup)]
                     else:
                         auxillery_layers += [Auxillery("conv", input_dim // scale_cum,
                                                    self.num_classes, x, self.no_similarity_std,
@@ -470,18 +470,20 @@ class DGL_Net(nn.Module):
 
 class auxillary_classifier2(nn.Module):
     def __init__(self, input_features=256, in_size=32, cnn=False,
-                 num_classes=10, nlin=0, mlp_layers=0, block="conv"):
+                 num_classes=10, nlin=0, mlp_layers=0, block="conv",
+                 loss_sup="pred"):
         super(auxillary_classifier2, self).__init__()
         self.nlin = nlin
         self.in_size = in_size
         self.cnn = cnn
         feature_size = input_features
+        self.loss_sup = loss_sup
         self.block = block
         self.blocks = []
         # TODO make argument
         # self.dropout_p = 0.2
         # self.dropout = torch.nn.Dropout2d(p=self.dropout_p, inplace=False)
-
+        
 
         if block == "conv":
             for n in range(self.nlin):
@@ -501,6 +503,9 @@ class auxillary_classifier2(nn.Module):
                                      kernel_size=1, stride=1, padding=0, bias=False)
 
                 self.blocks.append(nn.Sequential(conv, bn_temp, relu_temp))
+            if loss_sup == 'predsim':
+                self.loss_sim = nn.Conv2d(feature_size, feature_size, 3, stride=1, padding=1, bias=False)
+
 
         self.blocks = nn.ModuleList(self.blocks)
 
@@ -526,22 +531,30 @@ class auxillary_classifier2(nn.Module):
                 bn_temp = nn.BatchNorm1d(mlp_feat)
                 layers += [nn.Linear(in_feat, mlp_feat),
                            bn_temp, nn.ReLU(True)]
+            
+            if self.loss_sup == "predsim" and block == "linear":
+                self.loss_sim = nn.Linear(feature_size, feature_size, bias=False)
+            self.preclassifier = nn.Sequential(*layers)
 
-            layers += [nn.Linear(mlp_feat, num_classes)]
-            self.classifier = nn.Sequential(*layers)
+            self.classifier = nn.Linear(mlp_feat, num_classes)
             self.mlp = True
         else:
             self.mlp = False
             if block == "conv":
+                self.preclassifier = nn.Identity()
                 self.classifier = nn.Linear(feature_size*4, num_classes)
+                
             else:
+                self.preclassifier = nn.Identity()
                 self.classifier = nn.Linear(feature_size, num_classes)
+                if loss_sup == 'predsim':
+                    self.loss_sim = nn.Linear(feature_size, feature_size, bias=False)
+
 
 
     def forward(self, x):
-        if type(x) is tuple:
-            x = x[1]
         out = x
+        loss_sim = None
         if not self.cnn and self.block == "conv":
             # First reduce the size by 16
             out = F.adaptive_avg_pool2d(out, (math.ceil(self.in_size / 4), math.ceil(self.in_size / 4)))
@@ -550,11 +563,23 @@ class auxillary_classifier2(nn.Module):
             for n in range(self.nlin):
                 out = self.blocks[n](out)
                 #out = self.dropout(out)
+            if self.loss_sup == "predsim":
+                loss_sim = self.loss_sim(out)
+                loss_sim = similarity_matrix(loss_sim, False)
+
+
         if self.block == "conv":
             out = self.adaptive_avg_pool(out)
 
         if not self.mlp and self.block == "conv":
             out = self.bn(out)
         out = out.view(out.size(0), -1)
+        out = self.preclassifier(out)
+
+        if self.loss_sup == "predsim" and self.block != "conv":
+            loss_sim = self.loss_sim(out)
+            loss_sim = similarity_matrix(loss_sim, False)
+
+
         out = self.classifier(out)
-        return (None, out)
+        return (loss_sim, out)
