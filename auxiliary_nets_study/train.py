@@ -268,7 +268,7 @@ def main():
         test(epoch, model, test_loader)
         for n in range(n_cnn):
             if layer_optim[n] is not None:
-                wandb.log({"Layer " + str(n) + " test loss": losses[n].avg}, step=epoch)
+                wandb.log({"Layer " + str(n) + " train loss": losses[n].avg}, step=epoch)
                 top1test = validate(test_loader, model, epoch, n, args.loss_sup, args.cuda)
                 print("n: {}, epoch {}, test top1:{} "
                       .format(n + 1, epoch, top1test))
