@@ -77,6 +77,10 @@ parser.add_argument('--lr-decay-epoch', type=int, default=80,
                     help='epoch to decay sgd learning rate (default: 80)')
 parser.add_argument('--nlin',  default=3,type=int,
                     help='number of conv layers in aux classifiers')
+parser.add_argument('--lr-schd', default='nokland',
+                    help='nokland or cyclic (default: nokland)')
+parser.add_argument('--base-lr', type=float, default=1e-4, help='block size')
+
 
 
 
@@ -198,6 +202,13 @@ def main():
 
     # Define optimizer en local lr
     layer_optim, layer_lr = optim_init(n_cnn, model, args.lr, args.weight_decay, args.optim)
+    if args.lr_schd == 'cyclic':
+        layer_schd = [None] * n_cnn
+        for n in range(n_cnn): 
+            if layer_optim[n] is not None:
+                layer_schd[n] = torch.optim.lr_scheduler.CyclicLR(layer_optim[n],
+                        args.base_lr, args.lr)
+
 
 ######################### Lets do the training
     for epoch in range(0, args.epochs+1):
@@ -206,13 +217,13 @@ def main():
         top1 = [AverageMeter() for _ in range(n_cnn)]
         losses = [AverageMeter() for _ in range(n_cnn)]
 
-
-        for n in range(n_cnn):
-            layer_lr[n] = lr_scheduler(layer_lr[n], epoch-1, args)
-            optimizer = layer_optim[n]
-            if optimizer is not None: 
-                for param_group in optimizer.param_groups:
-                    param_group['lr'] = layer_lr[n]
+        if args.lr_schd == 'nokland':
+            for n in range(n_cnn):
+                layer_lr[n] = lr_scheduler(layer_lr[n], epoch-1, args)
+                optimizer = layer_optim[n]
+                if optimizer is not None: 
+                    for param_group in optimizer.param_groups:
+                        param_group['lr'] = layer_lr[n]
 
         for i, (inputs, targets) in enumerate(train_loader):
             if args.cuda:
@@ -245,6 +256,9 @@ def main():
                     optimizer.step()  
                     representation.detach_()
                     losses[n].update(float(loss.item()), float(targets.size(0)))
+                    if args.lr_schd == 'cyclic':
+                        layer_schd[n].step()
+
 
 
 
