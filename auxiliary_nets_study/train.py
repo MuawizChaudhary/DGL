@@ -86,7 +86,7 @@ args.cuda = not args.no_cuda and torch.cuda.is_available()
 
 wandb.init(config=args, project="dgl-refactored")
 import uuid
-filename = str(uuid.uuid4())
+filename = "logs/" + str(uuid.uuid4())
 import git
 repo = git.Repo(search_parent_directories=True)
 sha = repo.head.object.hexsha
