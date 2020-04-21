@@ -105,9 +105,9 @@ print(filename)
 
 ##################### Logs
 def lr_scheduler(lr, epoch, args):
-    if args.optim == "adam":
+    if args.optim == "adam_disabled":
         lr = lr * args.lr_decay_fact ** bisect_right(args.lr_decay_milestones, (epoch))
-    elif args.optim == "sgd":
+    elif args.optim == "adam" or args.optim == "sgd":
         if (epoch+2) % args.lr_decay_epoch == 0:
             lr = lr * args.lr_decay_fact
         else:
