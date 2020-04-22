@@ -16,6 +16,7 @@ np.random.seed(25)
 import random
 random.seed(25)
 import sys
+import ast
 
 import torch.optim as optim
 from torchvision import datasets, transforms
@@ -80,8 +81,7 @@ parser.add_argument('--nlin',  default=3,type=int,
 parser.add_argument('--lr-schd', default='nokland',
                     help='nokland or cyclic (default: nokland)')
 parser.add_argument('--base-lr', type=float, default=1e-4, help='block size')
-
-
+parser.add_argument('--lr-schedule', type=str, default='{0:1e-2, 30:1e-3, 60:5e-4, 90:1e-4}')
 
 
 
@@ -208,7 +208,7 @@ def main():
             if layer_optim[n] is not None:
                 layer_schd[n] = torch.optim.lr_scheduler.CyclicLR(layer_optim[n],
                         args.base_lr, args.lr)
-
+    learning_rates = ast.literal_eval(args.lr_schedule)
 
 ######################### Lets do the training
     for epoch in range(0, args.epochs+1):
@@ -224,6 +224,13 @@ def main():
                 if optimizer is not None: 
                     for param_group in optimizer.param_groups:
                         param_group['lr'] = layer_lr[n]
+        elif args.lr_schd == 'constant':
+            closest_i = max([i for i in learning_rates if i <= epoch])
+            for n in range(n_cnn):
+                optimizer = layer_optim[n]
+                if optimizer is not None:
+                    for param_group in optimizer.param_groups:
+                        param_group['lr'] = learning_rates[closest_i]
 
         for i, (inputs, targets) in enumerate(train_loader):
             if args.cuda:
