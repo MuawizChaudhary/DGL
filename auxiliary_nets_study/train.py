@@ -1,3 +1,6 @@
+#! /usr/bin/env python3
+
+
 import argparse
 import torch
 import torch.nn.parallel
@@ -28,7 +31,7 @@ parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 64)')
 parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                     help='input batch size for testing (default: 1000)')
-parser.add_argument('--epochs', type=int, default=400, metavar='N',
+parser.add_argument('--epochs', type=int, default=150, metavar='N',
                     help='number of epochs to train (default: 10)')
 parser.add_argument('--seed', type=int, default=25, metavar='S',
                     help='random seed (default: 1)')
@@ -81,7 +84,7 @@ parser.add_argument('--nlin',  default=3,type=int,
 parser.add_argument('--lr-schd', default='nokland',
                     help='nokland or cyclic (default: nokland)')
 parser.add_argument('--base-lr', type=float, default=1e-4, help='block size')
-parser.add_argument('--lr-schedule', type=str, default='{0:1e-2, 30:1e-3, 60:5e-4, 90:1e-4}')
+parser.add_argument('--lr-schedule', nargs='+', type=str, default='{0:1e-2, 30:1e-3, 60:5e-4, 90:1e-4}')
 
 
 
@@ -124,7 +127,8 @@ def optim_init(ncnn, model, lr, weight_decay, optimizer):
             if args.optim == "adam":
                 layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n], weight_decay=weight_decay, amsgrad=optimizer == 'amsgrad')
             elif args.optim == "sgd":
-                layer_optim[n] = optim.SGD(to_train, lr=layer_lr[n], momentum=0.9, weight_decay=weight_decay)
+                layer_optim[n] = optim.SGD(to_train, lr=layer_lr[n],
+                        momentum=0.9, weight_decay=weight_decay)
         else:
             layer_optim[n] = None
     return layer_optim, layer_lr
@@ -208,7 +212,18 @@ def main():
             if layer_optim[n] is not None:
                 layer_schd[n] = torch.optim.lr_scheduler.CyclicLR(layer_optim[n],
                         args.base_lr, args.lr)
-    learning_rates = ast.literal_eval(args.lr_schedule)
+    elif args.lr_schd == 'expo':
+        layer_schd = [None] * n_cnn
+        for n in range(n_cnn): 
+            if layer_optim[n] is not None:
+                layer_schd[n] = torch.optim.lr_scheduler.ExponentialLR(layer_optim[n],
+                        gamma=0.95)
+
+    string = "{ "
+    for i in args.lr_schedule:
+        string += i + " "
+    string += " }"
+    #learning_rates = ast.literal_eval(string)
 
 ######################### Lets do the training
     for epoch in range(0, args.epochs+1):
@@ -265,6 +280,13 @@ def main():
                     losses[n].update(float(loss.item()), float(targets.size(0)))
                     if args.lr_schd == 'cyclic':
                         layer_schd[n].step()
+
+
+        if args.lr_schd == 'expo':
+            for n in range(n_cnn): 
+                if layer_optim[n] is not None:
+                    layer_schd[n].step()
+
 
 
 
