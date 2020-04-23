@@ -219,7 +219,7 @@ class VGGn(nn.Module):
         feat_mult (float): Multiply number of feature maps with this number.
     '''
     def __init__(self, vggname, input_dim=32, input_ch=3, num_classes=10,
-                 feat_mult=1, dropout=0.0, nonlin="relu", no_similarity_std=False,
+                 feat_mult=1, dropout=0.0, nonlin="relu", 
                  loss_sup="predsim", dim_in_decoder=2048,
                  num_layers=0, num_hidden=1024,
                  mlp_layers=0, nlin=0, pooling="avg",
@@ -229,7 +229,6 @@ class VGGn(nn.Module):
         self.input_dim = input_dim
         self.input_ch = input_ch
         self.num_classes = num_classes
-        self.no_similarity_std = no_similarity_std
         self.dropout = dropout
         self.nonlin = nonlin
         self.loss_sup = loss_sup
@@ -425,7 +424,6 @@ class auxillary_conv_classifier(nn.Module):
 
         if self.loss_sup == "predsim":
             loss_sim = self.loss_sim(out)
-            loss_sim = similarity_matrix(loss_sim, False)
 
         out = self.pool(out)
 
@@ -479,24 +477,7 @@ class auxillary_linear_classifier(nn.Module):
 
         if self.loss_sup == "predsim":
             loss_sim = self.loss_sim(out)
-            loss_sim = similarity_matrix(loss_sim, False)
 
         out = self.classifier(out)
         return (loss_sim, out)
-
-
-## had to put this here, so we could avoid circular imports
-def similarity_matrix(x, no_similarity_std):
-    ''' Calculate adjusted cosine similarity matrix of size x.size(0) x x.size(0). '''
-    if x.dim() == 4:
-        if not no_similarity_std and x.size(1) > 3 and x.size(2) > 1:
-            z = x.view(x.size(0), x.size(1), -1)
-            x = z.std(dim=2)
-        else:
-            x = x.view(x.size(0),-1)
-    xc = x - x.mean(dim=1).unsqueeze(1)
-    xn = xc / (1e-8 + torch.sqrt(torch.sum(xc**2, dim=1))).unsqueeze(1)
-    R = xn.matmul(xn.transpose(1,0)).clamp(-1,1)
-    return R
-
 

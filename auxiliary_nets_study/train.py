@@ -198,10 +198,10 @@ def main():
 
     # Model
     if args.model.startswith('vgg'):
-        model = VGGn(args.model, feat_mult=args.feat_mult, dropout=args.dropout,
-                nonlin=args.nonlin, no_similarity_std=args.no_similarity_std,
-                loss_sup= args.loss_sup, dim_in_decoder=args.dim_in_decoder,
-                num_layers=args.num_layers, num_hidden = args.num_hidden,
+        model = VGGn(args.model, feat_mult=args.feat_mult,
+                dropout=args.dropout, nonlin=args.nonlin, 
+                loss_sup=args.loss_sup, dim_in_decoder=args.dim_in_decoder,
+                num_layers=args.num_layers, num_hidden=args.num_hidden,
                 mlp_layers=args.mlp_layers, nlin=args.nlin,
                 pooling=args.pooling, bn=args.bn, aux_bn=args.aux_bn)
     elif args.model == 'resnet18':
