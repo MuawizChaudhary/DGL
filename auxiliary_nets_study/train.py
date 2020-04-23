@@ -9,7 +9,7 @@ import torch.utils.data
 import time
 from bisect import bisect_right
 import itertools
-from models import DGL_Net, VGGn
+from models import VGGn
 from settings import parse_args
 from utils import to_one_hot,  AverageMeter,  loss_calc, test, validate
 from resnet import resnet18, resnet34, resnet50, resnet101, resnet152
@@ -85,6 +85,11 @@ parser.add_argument('--lr-schd', default='nokland',
                     help='nokland or cyclic (default: nokland)')
 parser.add_argument('--base-lr', type=float, default=1e-4, help='block size')
 parser.add_argument('--lr-schedule', nargs='+', type=float, default=[1e-2,1e-3, 5e-4, 1e-4])
+parser.add_argument('--gamma', type=float, default=.95, help='block size')
+parser.add_argument('--pooling', default='avg',
+                    help='avg or adaptive average pooling')
+
+
 
 
 
@@ -104,34 +109,49 @@ print(" ".join(str(item) for item in sys.argv[0:]))
 print(filename)
 
 
-
-
 ##################### Logs
 def lr_scheduler(lr, epoch, args):
-    if args.optim == "adam":
+    if args.lr_schd == "nokland":
         lr = lr * args.lr_decay_fact ** bisect_right(args.lr_decay_milestones, (epoch))
-    elif args.optim == "adam" or args.optim == "sgd":
+    elif args.lr_schd == "step":         
         if (epoch+2) % args.lr_decay_epoch == 0:
             lr = lr * args.lr_decay_fact
         else:
             lr = lr
     return lr
 
-def optim_init(ncnn, model, lr, weight_decay, optimizer):
+
+def optim_init(ncnn, model, args):
     layer_optim = [None] * ncnn
-    layer_lr = [lr] * ncnn
+    layer_lr = [args.lr] * ncnn
     for n in range(ncnn):
         to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
         if len(list(to_train)) != 0:
             to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
             if args.optim == "adam":
-                layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n], weight_decay=weight_decay, amsgrad=optimizer == 'amsgrad')
+                layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n],
+                        weight_decay=args.weight_decay, amsgrad=args.optim == 'amsgrad')
             elif args.optim == "sgd":
                 layer_optim[n] = optim.SGD(to_train, lr=layer_lr[n],
-                        momentum=0.9, weight_decay=weight_decay)
+                        momentum=args.momentum, weight_decay=args.weight_decay)
         else:
             layer_optim[n] = None
     return layer_optim, layer_lr
+
+
+def lr_schd_init(n_cnn, layer_optim, args):
+    layer_schd = [None] * n_cnn
+    if args.lr_schd == 'cyclic':
+        for n in range(n_cnn): 
+            if layer_optim[n] is not None:
+                layer_schd[n] = torch.optim.lr_scheduler.CyclicLR(layer_optim[n],
+                        args.base_lr, args.lr)
+    elif args.lr_schd == 'expo':
+        for n in range(n_cnn): 
+            if layer_optim[n] is not None:
+                layer_schd[n] = torch.optim.lr_scheduler.ExponentialLR(layer_optim[n],
+                        gamma=args.gamma)
+    return layer_schd
 
 
 def main():
@@ -174,10 +194,8 @@ def main():
     if args.model.startswith('vgg'):
         model = VGGn(args.model, feat_mult=args.feat_mult, dropout=args.dropout,nonlin=args.nonlin, no_similarity_std=args.no_similarity_std,
                       loss_sup= args.loss_sup, dim_in_decoder=args.dim_in_decoder, num_layers=args.num_layers,
-            num_hidden = args.num_hidden, aux_type=args.aux_type,
-            mlp_layers=args.mlp_layers, nlin=args.nlin)
-    elif args.model == 'dgl':
-        DGL_Net(aux_type=args.type_aux, block_size=args.block_size)
+            num_hidden = args.num_hidden,
+            mlp_layers=args.mlp_layers, nlin=args.nlin, pooling=args.pooling)
     elif args.model == 'resnet18':
         model = resnet18(nlin=args.nlin, mlp=args.mlp_layers,
                                        block_size=args.block_size)
@@ -203,49 +221,16 @@ def main():
 
     n_cnn = len(model.main_cnn.blocks)
 
+    # Define optimizer and local lr
+    layer_optim, layer_lr = optim_init(n_cnn, model, args)
+    layer_schd = lr_schd_init(n_cnn, layer_optim, args)
 
-    # Define optimizer en local lr
-    layer_optim, layer_lr = optim_init(n_cnn, model, args.lr, args.weight_decay, args.optim)
-    if args.lr_schd == 'cyclic':
-        layer_schd = [None] * n_cnn
-        for n in range(n_cnn): 
-            if layer_optim[n] is not None:
-                layer_schd[n] = torch.optim.lr_scheduler.CyclicLR(layer_optim[n],
-                        args.base_lr, args.lr)
-    elif args.lr_schd == 'expo':
-        layer_schd = [None] * n_cnn
-        for n in range(n_cnn): 
-            if layer_optim[n] is not None:
-                layer_schd[n] = torch.optim.lr_scheduler.ExponentialLR(layer_optim[n],
-                        gamma=0.95)
-
-    #string = "{ "
-    #for i in args.lr_schedule:
-    #    string += i + " "
-    #string += " }"
-    #learning_rates = ast.literal_eval(string)
-
-######################### Lets do the training
+    ######################### Lets do the training
     for epoch in range(0, args.epochs+1):
         # Make sure we set the bn right
         model.train()
         top1 = [AverageMeter() for _ in range(n_cnn)]
         losses = [AverageMeter() for _ in range(n_cnn)]
-
-        if args.lr_schd == 'nokland':
-            for n in range(n_cnn):
-                layer_lr[n] = lr_scheduler(layer_lr[n], epoch-1, args)
-                optimizer = layer_optim[n]
-                if optimizer is not None: 
-                    for param_group in optimizer.param_groups:
-                        param_group['lr'] = layer_lr[n]
-        elif args.lr_schd == 'constant':
-            closest_i = max([c for c, i in enumerate(args.lr_decay_milestones) if i <= epoch])
-            for n in range(n_cnn):
-                optimizer = layer_optim[n]
-                if optimizer is not None:
-                    for param_group in optimizer.param_groups:
-                        param_group['lr'] = args.lr_schedule[closest_i]
 
         for i, (inputs, targets) in enumerate(train_loader):
             if args.cuda:
@@ -280,12 +265,28 @@ def main():
                     losses[n].update(float(loss.item()), float(targets.size(0)))
                     if args.lr_schd == 'cyclic':
                         layer_schd[n].step()
-
-
-        if args.lr_schd == 'expo':
+        
+        
+        
+        if args.lr_schd == 'nokland' or args.lr_schd == 'step':
+            for n in range(n_cnn):
+                layer_lr[n] = lr_scheduler(layer_lr[n], epoch-1, args)
+                optimizer = layer_optim[n]
+                if optimizer is not None: 
+                    for param_group in optimizer.param_groups:
+                        param_group['lr'] = layer_lr[n]
+        elif args.lr_schd == 'constant':
+            closest_i = max([c for c, i in enumerate(args.lr_decay_milestones) if i <= epoch])
+            for n in range(n_cnn):
+                optimizer = layer_optim[n]
+                if optimizer is not None:
+                    for param_group in optimizer.param_groups:
+                        param_group['lr'] = args.lr_schedule[closest_i]
+        elif args.lr_schd == 'expo':
             for n in range(n_cnn): 
                 if layer_optim[n] is not None:
                     layer_schd[n].step()
+
 
 
 
