@@ -163,14 +163,18 @@ class Net(nn.Module):
         for i in range(1, num_layers):
             layer = LocalLossBlockLinear(int(num_hidden // (reduce_factor ** (i - 1))),
                                          int(num_hidden // (reduce_factor ** i)),
-                                         num_classes, dropout=dropout, nonlin=nonlin)
+                                         num_classes, dropout=dropout,
+                                         nonlin=nonlin, bn=bn)
             self.layers.extend([layer])
 
         # NOT PROMISED TO RUN CURRENTLY
         for i in range(1, num_layers):
-            aux = Auxillery("linear", int(num_hidden // (reduce_factor ** i)),
-                            num_classes, int(num_hidden // (reduce_factor ** i)),
-                            no_similarity_std, loss_sup, dim_in_decoder)
+            num_hidden_i = int(num_hidden // (reduce_factor ** i))
+            aux = auxillary_classifier2(num_hidden_i,  num_hidden_i,
+                    cnn=False, num_classes=num_classes, nlin=nlin,
+                    mlp_layers=mlp_layers, dim_in_decoder_arg=dim_in_decoder,
+                    block="linear", loss_sup=loss_sup, pooling=pooling,
+                    bn=aux_bn)
             self.auxillery_layers.extend([aux])
 
         layer_out = nn.Linear(int(num_hidden // (reduce_factor ** (num_layers - 1))), num_classes)
