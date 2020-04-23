@@ -406,12 +406,13 @@ class auxillary_conv_classifier(nn.Module):
     def forward(self, x):
         out = x
         loss_sim = None
+
         if self.pooling == "adaptiveavg":
             # First reduce the size by 16
             out = F.adaptive_avg_pool2d(out, (math.ceil(self.in_size / 4), math.ceil(self.in_size / 4)))
+
         for n in range(self.nlin):
             out = self.blocks[n](out)
-                #out = self.dropout(out)
 
         if self.loss_sup == "predsim":
             loss_sim = self.loss_sim(out)
@@ -421,6 +422,7 @@ class auxillary_conv_classifier(nn.Module):
 
         if not self.mlp:
             out = self.bn(out)
+
         out = out.view(out.size(0), -1)
         out = self.preclassifier(out)
         out = self.classifier(out)
@@ -430,7 +432,7 @@ class auxillary_conv_classifier(nn.Module):
 class auxillary_linear_classifier(nn.Module):
     def __init__(self, input_features=256, in_size=32, cnn=False,
                  num_classes=10, nlin=0, mlp_layers=0, dim_in_decoder_arg=4096,
-                 block="conv", loss_sup="pred", pooling="avg", bn=True):
+                 block="linear", loss_sup="pred", pooling="avg", bn=True):
         super(auxillary_linear_classifier, self).__init__()
         self.nlin = nlin
         self.in_size = in_size
@@ -441,12 +443,14 @@ class auxillary_linear_classifier(nn.Module):
         self.blocks = []
         self.pooling = pooling
         
+        if loss_sup == 'predsim':
+            self.loss_sim = nn.Linear(feature_size, feature_size, bias=False)
+
         if mlp_layers > 0:
             mlp_feat = feature_size
             layers = []
+            in_feat = mlp_feat
             for l in range(mlp_layers):
-                in_feat = mlp_feat
-
                 if bn:
                     bn_temp = nn.BatchNorm1d(mlp_feat)
                 else:
@@ -455,16 +459,11 @@ class auxillary_linear_classifier(nn.Module):
                 layers += [nn.Linear(in_feat, mlp_feat),
                            bn_temp, nn.ReLU(True)]
             
-            if self.loss_sup == "predsim" and block == "linear":
-                self.loss_sim = nn.Linear(feature_size, feature_size, bias=False)
-
             self.preclassifier = nn.Sequential(*layers)
             self.classifier = nn.Linear(mlp_feat, num_classes)
             self.mlp = True
         else:
             self.mlp = False
-            if loss_sup == 'predsim':
-                self.loss_sim = nn.Linear(feature_size, feature_size, bias=False)
             self.preclassifier = nn.Identity()
             self.classifier = nn.Linear(feature_size, num_classes)
 
