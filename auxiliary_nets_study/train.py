@@ -105,10 +105,11 @@ import git
 repo = git.Repo(search_parent_directories=True)
 sha = repo.head.object.hexsha
 print(filename)
-sys.stdout = open(filename, "w",buffering=1)
 print(sha)
-print(" ".join(str(item) for item in sys.argv[0:]))
-print(filename)
+#sys.stdout = open(filename, "w",buffering=1)
+#print(sha)
+#print(" ".join(str(item) for item in sys.argv[0:]))
+#print(filename)
 
 
 ##################### Logs
