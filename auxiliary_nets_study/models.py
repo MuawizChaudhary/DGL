@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from utils import similarity_matrix
 
 
 class rep(nn.Module):
@@ -15,19 +14,19 @@ class rep(nn.Module):
         # if upto = False we forward just through layer n
         if upto:
             for i in range(n + 1):
-                if isinstance(self.blocks[i], nn.MaxPool2d) or isinstance(self.blocks[i], nn.Linear):
-                    out = self.blocks[i](x)
-                    return out, out
-                else:
+                if isinstance(self.blocks[i], LocalLossBlockLinear) or isinstance(self.blocks[i], LocalLossBlockConv):
                     x, x_return = self.forward(x, i, upto=False)
                     return x, x_return
+                else:
+                    out = self.blocks[i](x)
+                    return out, out
 
-        if isinstance(self.blocks[n], nn.MaxPool2d) or isinstance(self.blocks[n], nn.Linear):
+        if isinstance(self.blocks[n], LocalLossBlockLinear) or isinstance(self.blocks[n], LocalLossBlockConv):
+            x, x_return = self.blocks[n](x)
+            return x, x_return
+        else:
             out = self.blocks[n](x)
             return out, out
-        else:
-            out, out_return = self.blocks[n](x)
-            return out, out_return
 
 
 class LocalLossBlockLinear(nn.Module):
@@ -197,6 +196,16 @@ cfg = {
 }
 
 
+class View(nn.Module):
+    def __init__(self):
+        super(View, self).__init__()
+
+    def forward(self, x):
+        return x.view(x.shape[0], -1)
+
+
+
+
 class VGGn(nn.Module):
     '''
     VGG and VGG-like networks.
@@ -248,7 +257,8 @@ class VGGn(nn.Module):
             auxillery_layers.extend([*classifier.auxillery_layers])
         else:
             classifier = nn.Linear(output_dim * output_dim * int(output_ch * feat_mult), num_classes)
-            features.append(classifier)
+
+            features.append(nn.Sequential(View(), classifier))
             auxillery_layers.append(nn.Identity())
 
         self.main_cnn = rep(nn.ModuleList(features))
@@ -360,7 +370,7 @@ class auxillary_conv_classifier(nn.Module):
 
         elif pooling == "adaptiveavg":
             self.pool = nn.AdaptiveAvgPool2d((2, 2))
-            dim_in_decoder = feature_size
+            dim_in_decoder = 4 * feature_size
 
         if bn:
             self.bn = nn.BatchNorm2d(feature_size)
@@ -473,3 +483,20 @@ class auxillary_linear_classifier(nn.Module):
 
         out = self.classifier(out)
         return (loss_sim, out)
+
+
+## had to put this here, so we could avoid circular imports
+def similarity_matrix(x, no_similarity_std):
+    ''' Calculate adjusted cosine similarity matrix of size x.size(0) x x.size(0). '''
+    if x.dim() == 4:
+        if not no_similarity_std and x.size(1) > 3 and x.size(2) > 1:
+            z = x.view(x.size(0), x.size(1), -1)
+            x = z.std(dim=2)
+        else:
+            x = x.view(x.size(0),-1)
+    xc = x - x.mean(dim=1).unsqueeze(1)
+    xn = xc / (1e-8 + torch.sqrt(torch.sum(xc**2, dim=1))).unsqueeze(1)
+    R = xn.matmul(xn.transpose(1,0)).clamp(-1,1)
+    return R
+
+
