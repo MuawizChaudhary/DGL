@@ -137,9 +137,9 @@ class Net(nn.Module):
         num_classes (int): Number of classes (used in local prediction loss).
     '''
     def __init__(self, num_layers, num_hidden, input_dim, input_ch,
-                 num_classes, no_similarity_std, dropout=0.0, nonlin='relu',
-                 loss_sup="predsim", dim_in_decoder=2048, 
-                 mlp_layers=0, nlin=0, pooling="avg", bn=True, aux_bn=True):
+                 num_classes, dropout=0.0, nonlin='relu',
+                 loss_sup="predsim", mlp_layers=0, bn=True,
+                 aux_bn=True):
         super(Net, self).__init__()
 
         self.num_hidden = num_hidden
@@ -152,10 +152,10 @@ class Net(nn.Module):
                                                           bn=bn)])
 
         self.auxillery_layers = nn.ModuleList([auxillary_linear_classifier(num_hidden,
-                input_dim, cnn=False,
-                num_classes=num_classes, nlin=nlin,
-                mlp_layers=mlp_layers, dim_in_decoder_arg=dim_in_decoder,
-                block="linear", loss_sup=loss_sup, pooling=pooling, bn=aux_bn)])
+                num_classes=num_classes,
+                mlp_layers=mlp_layers,
+                loss_sup=loss_sup, 
+                bn=aux_bn)])
 
         for i in range(1, num_layers):
             layer = LocalLossBlockLinear(int(num_hidden // (reduce_factor ** (i - 1))),
@@ -166,10 +166,10 @@ class Net(nn.Module):
 
         for i in range(1, num_layers):
             num_hidden_i = int(num_hidden // (reduce_factor ** i))
-            aux = auxillary_linear_classifier(num_hidden_i,  num_hidden_i,
-                    cnn=False, num_classes=num_classes, nlin=nlin,
-                    mlp_layers=mlp_layers, dim_in_decoder_arg=dim_in_decoder,
-                    block="linear", loss_sup=loss_sup, pooling=pooling,
+            aux = auxillary_linear_classifier(num_hidden_i,
+                    num_classes=num_classes,
+                    mlp_layers=mlp_layers,
+                    loss_sup=loss_sup,
                     bn=aux_bn)
             self.auxillery_layers.extend([aux])
 
@@ -239,10 +239,10 @@ class VGGn(nn.Module):
         if num_layers > 0:
             classifier = Net(num_layers, num_hidden, output_dim,
                              int(output_ch * feat_mult), num_classes,
-                             self.no_similarity_std, self.dropout, nonlin=nonlin,
-                             loss_sup=loss_sup, dim_in_decoder=dim_in_decoder,
+                             self.dropout, nonlin=nonlin,
+                             loss_sup=loss_sup,
                              mlp_layers=mlp_layers,
-                             nlin=nlin, pooling=pooling, bn=bn,
+                             bn=bn,
                              aux_bn=aux_bn)
             features.extend([*classifier.layers])
             auxillery_layers.extend([*classifier.auxillery_layers])
@@ -312,14 +312,13 @@ class VGGn(nn.Module):
 class auxillary_conv_classifier(nn.Module):
     def __init__(self, input_features=256, in_size=32, cnn=False,
                  num_classes=10, nlin=0, mlp_layers=0, dim_in_decoder_arg=4096,
-                 block="conv", loss_sup="pred", pooling="avg", bn=True):
+                 loss_sup="pred", pooling="avg", bn=True):
         super(auxillary_conv_classifier, self).__init__()
         self.nlin = nlin
         self.in_size = in_size
         self.cnn = cnn
         feature_size = input_features
         self.loss_sup = loss_sup
-        self.block = block
         self.blocks = []
         self.pooling = pooling
 
@@ -430,18 +429,13 @@ class auxillary_conv_classifier(nn.Module):
 
 
 class auxillary_linear_classifier(nn.Module):
-    def __init__(self, input_features=256, in_size=32, cnn=False,
-                 num_classes=10, nlin=0, mlp_layers=0, dim_in_decoder_arg=4096,
-                 block="linear", loss_sup="pred", pooling="avg", bn=True):
+    def __init__(self, input_features=256, 
+                 num_classes=10, mlp_layers=0,
+                 loss_sup="pred", bn=True):
         super(auxillary_linear_classifier, self).__init__()
-        self.nlin = nlin
-        self.in_size = in_size
-        self.cnn = cnn
         feature_size = input_features
         self.loss_sup = loss_sup
-        self.block = block
         self.blocks = []
-        self.pooling = pooling
         
         if loss_sup == 'predsim':
             self.loss_sim = nn.Linear(feature_size, feature_size, bias=False)
