@@ -509,7 +509,7 @@ class auxillary_classifier2(nn.Module):
 
         self.blocks = nn.ModuleList(self.blocks)
 
-        if block == "conv":
+        if block == "conv" and (nlin > 0 or mlp_layers > 0):
             self.adaptive_avg_pool = nn.AdaptiveAvgPool2d((2, 2))
             self.bn = nn.BatchNorm2d(feature_size)
 

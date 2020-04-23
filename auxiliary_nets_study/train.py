@@ -84,7 +84,7 @@ parser.add_argument('--nlin',  default=3,type=int,
 parser.add_argument('--lr-schd', default='nokland',
                     help='nokland or cyclic (default: nokland)')
 parser.add_argument('--base-lr', type=float, default=1e-4, help='block size')
-parser.add_argument('--lr-schedule', nargs='+', type=str, default='{0:1e-2, 30:1e-3, 60:5e-4, 90:1e-4}')
+parser.add_argument('--lr-schedule', nargs='+', type=float, default=[1e-2,1e-3, 5e-4, 1e-4])
 
 
 
@@ -108,7 +108,7 @@ print(filename)
 
 ##################### Logs
 def lr_scheduler(lr, epoch, args):
-    if args.optim == "adam_disabled":
+    if args.optim == "adam":
         lr = lr * args.lr_decay_fact ** bisect_right(args.lr_decay_milestones, (epoch))
     elif args.optim == "adam" or args.optim == "sgd":
         if (epoch+2) % args.lr_decay_epoch == 0:
@@ -219,10 +219,10 @@ def main():
                 layer_schd[n] = torch.optim.lr_scheduler.ExponentialLR(layer_optim[n],
                         gamma=0.95)
 
-    string = "{ "
-    for i in args.lr_schedule:
-        string += i + " "
-    string += " }"
+    #string = "{ "
+    #for i in args.lr_schedule:
+    #    string += i + " "
+    #string += " }"
     #learning_rates = ast.literal_eval(string)
 
 ######################### Lets do the training
@@ -240,12 +240,12 @@ def main():
                     for param_group in optimizer.param_groups:
                         param_group['lr'] = layer_lr[n]
         elif args.lr_schd == 'constant':
-            closest_i = max([i for i in learning_rates if i <= epoch])
+            closest_i = max([c for c, i in enumerate(args.lr_decay_milestones) if i <= epoch])
             for n in range(n_cnn):
                 optimizer = layer_optim[n]
                 if optimizer is not None:
                     for param_group in optimizer.param_groups:
-                        param_group['lr'] = learning_rates[closest_i]
+                        param_group['lr'] = args.lr_schedule[closest_i]
 
         for i, (inputs, targets) in enumerate(train_loader):
             if args.cuda:
