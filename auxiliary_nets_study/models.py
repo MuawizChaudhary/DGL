@@ -65,15 +65,12 @@ class LocalLossBlockLinear(nn.Module):
 
         self.MLP = nn.Sequential(encoder, bn, nonlin)
 
-        if self.dropout_p > 0:
-            self.dropout = torch.nn.Dropout(p=self.dropout_p, inplace=False)
+        self.dropout = torch.nn.Dropout(p=self.dropout_p, inplace=False)
 
     def forward(self, x):
         x = x.view(x.size(0), -1)
         h = self.MLP(x)
-        h_return = h
-        if self.dropout_p > 0:
-            h_return = self.dropout(h_return)
+        h_return = self.dropout(h)
         return h, h_return
 
 
@@ -121,14 +118,11 @@ class LocalLossBlockConv(nn.Module):
 
         self.MLP = nn.Sequential(encoder, bn, nonlin)
 
-        if self.dropout_p > 0:
-            self.dropout = torch.nn.Dropout2d(p=self.dropout_p, inplace=False)
+        self.dropout = torch.nn.Dropout2d(p=self.dropout_p, inplace=False)
 
     def forward(self, x):
         h = self.MLP(x)
-        h_return = h
-        if self.dropout_p > 0:
-            h_return = self.dropout(h_return)
+        h_return = self.dropout(h)
         return h, h_return
 
 
