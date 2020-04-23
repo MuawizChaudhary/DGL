@@ -18,10 +18,6 @@ class rep(nn.Module):
                 if isinstance(self.blocks[i], nn.MaxPool2d) or isinstance(self.blocks[i], nn.Linear):
                     out = self.blocks[i](x)
                     return out, out
-                elif isinstance(self.blocks[i], LocalLossBlockLinear):
-                    x = x.view(x.size(0), -1)
-                    x, x_return = self.forward(x, i, upto=False)
-                    return x, x_return
                 else:
                     x, x_return = self.forward(x, i, upto=False)
                     return x, x_return
@@ -29,10 +25,6 @@ class rep(nn.Module):
         if isinstance(self.blocks[n], nn.MaxPool2d) or isinstance(self.blocks[n], nn.Linear):
             out = self.blocks[n](x)
             return out, out
-        elif isinstance(self.blocks[n], LocalLossBlockLinear):
-            x = x.view(x.size(0), -1)
-            out, out_return = self.blocks[n](x)
-            return out, out_return
         else:
             out, out_return = self.blocks[n](x)
             return out, out_return
@@ -77,6 +69,7 @@ class LocalLossBlockLinear(nn.Module):
             self.dropout = torch.nn.Dropout(p=self.dropout_p, inplace=False)
 
     def forward(self, x):
+        x = x.view(x.size(0), -1)
         h = self.MLP(x)
         h_return = h
         if self.dropout_p > 0:
