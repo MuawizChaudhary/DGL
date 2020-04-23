@@ -88,8 +88,10 @@ parser.add_argument('--lr-schedule', nargs='+', type=float, default=[1e-2,1e-3, 
 parser.add_argument('--gamma', type=float, default=.95, help='block size')
 parser.add_argument('--pooling', default='avg',
                     help='avg or adaptive average pooling')
-
-
+parser.add_argument('--bn', action='store_false', default=True,
+                    help='disable use of batch norm')
+parser.add_argument('--aux-bn', action='store_false', default=True,
+                    help='disable use of batch norm in auxillary layers')
 
 
 
@@ -192,10 +194,12 @@ def main():
 
     # Model
     if args.model.startswith('vgg'):
-        model = VGGn(args.model, feat_mult=args.feat_mult, dropout=args.dropout,nonlin=args.nonlin, no_similarity_std=args.no_similarity_std,
-                      loss_sup= args.loss_sup, dim_in_decoder=args.dim_in_decoder, num_layers=args.num_layers,
-            num_hidden = args.num_hidden,
-            mlp_layers=args.mlp_layers, nlin=args.nlin, pooling=args.pooling)
+        model = VGGn(args.model, feat_mult=args.feat_mult, dropout=args.dropout,
+                nonlin=args.nonlin, no_similarity_std=args.no_similarity_std,
+                loss_sup= args.loss_sup, dim_in_decoder=args.dim_in_decoder,
+                num_layers=args.num_layers, num_hidden = args.num_hidden,
+                mlp_layers=args.mlp_layers, nlin=args.nlin,
+                pooling=args.pooling, bn=args.bn, aux_bn=args.aux_bn)
     elif args.model == 'resnet18':
         model = resnet18(nlin=args.nlin, mlp=args.mlp_layers,
                                        block_size=args.block_size)
