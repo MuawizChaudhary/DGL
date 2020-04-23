@@ -99,6 +99,9 @@ args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
 wandb.init(config=args, project="dgl-refactored")
+
+
+
 import uuid
 filename = "logs/" + str(uuid.uuid4())
 import git
@@ -223,6 +226,8 @@ def main():
     if args.cuda:
         model = model.cuda()
     print(model)
+    print(sha)
+
 
     n_cnn = len(model.main_cnn.blocks)
 
