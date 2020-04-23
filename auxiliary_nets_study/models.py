@@ -41,7 +41,6 @@ class LocalLossBlockLinear(nn.Module):
         first_layer (bool): True if this is the first layer in the network (used in local reconstruction loss).
         dropout (float): Dropout rate, if None, read from args.dropout.
     '''
-
     def __init__(self, num_in, num_out, num_classes, dropout=0.0,
                  nonlin="relu", first_layer=False, bn=True):
         super(LocalLossBlockLinear, self).__init__()
@@ -91,7 +90,6 @@ class LocalLossBlockConv(nn.Module):
         dropout (float): Dropout rate, if None, read from args.dropout.
         bias (bool): True if to use trainable bias.
     '''
-
     def __init__(self, ch_in, ch_out, kernel_size, stride, padding,
                  num_classes, dim_out, dropout=0.0, nonlin="relu",
                  first_layer=False, bn=True):
@@ -138,7 +136,6 @@ class Net(nn.Module):
         input_ch (int): Number of feature maps for input.
         num_classes (int): Number of classes (used in local prediction loss).
     '''
-
     def __init__(self, num_layers, num_hidden, input_dim, input_ch,
                  num_classes, no_similarity_std, dropout=0.0, nonlin='relu',
                  loss_sup="predsim", dim_in_decoder=2048, 
@@ -153,13 +150,13 @@ class Net(nn.Module):
                                                           num_hidden, num_classes, dropout=dropout, nonlin=nonlin,
                                                           first_layer=True,
                                                           bn=bn)])
+
         self.auxillery_layers = nn.ModuleList([auxillary_classifier2(num_hidden,
                 input_dim, cnn=False,
                 num_classes=num_classes, nlin=nlin,
                 mlp_layers=mlp_layers, dim_in_decoder_arg=dim_in_decoder,
                 block="linear", loss_sup=loss_sup, pooling=pooling, bn=aux_bn)])
 
-        # NOT PROMISED TO RUN CURRENTLY
         for i in range(1, num_layers):
             layer = LocalLossBlockLinear(int(num_hidden // (reduce_factor ** (i - 1))),
                                          int(num_hidden // (reduce_factor ** i)),
@@ -167,7 +164,6 @@ class Net(nn.Module):
                                          nonlin=nonlin, bn=bn)
             self.layers.extend([layer])
 
-        # NOT PROMISED TO RUN CURRENTLY
         for i in range(1, num_layers):
             num_hidden_i = int(num_hidden // (reduce_factor ** i))
             aux = auxillary_classifier2(num_hidden_i,  num_hidden_i,
@@ -315,8 +311,8 @@ class VGGn(nn.Module):
 
 class auxillary_classifier2(nn.Module):
     def __init__(self, input_features=256, in_size=32, cnn=False,
-                 num_classes=10, nlin=0, mlp_layers=0, dim_in_decoder_arg=4096,  block="conv",
-                 loss_sup="pred", pooling="avg", bn=True):
+                 num_classes=10, nlin=0, mlp_layers=0, dim_in_decoder_arg=4096,
+                 block="conv", loss_sup="pred", pooling="avg", bn=True):
         super(auxillary_classifier2, self).__init__()
         self.nlin = nlin
         self.in_size = in_size
@@ -326,11 +322,7 @@ class auxillary_classifier2(nn.Module):
         self.block = block
         self.blocks = []
         self.pooling = pooling
-        # TODO make argument
-        # self.dropout_p = 0.2
-        # self.dropout = torch.nn.Dropout2d(p=self.dropout_p, inplace=False)
         
-
         if block == "conv":
             for n in range(self.nlin):
 
@@ -345,13 +337,10 @@ class auxillary_classifier2(nn.Module):
                                      kernel_size=1, stride=1, padding=0, bias=False)
 
                 self.blocks.append(nn.Sequential(conv, bn_temp, relu_temp))
+
             if loss_sup == 'predsim':
                 self.loss_sim = nn.Conv2d(feature_size, feature_size, 3, stride=1, padding=1, bias=False)
-
-
-        self.blocks = nn.ModuleList(self.blocks)
-
-        if block == "conv":
+        
             if pooling == "avg":
                 ks_h, ks_w = 1, 1
                 dim_out_h, dim_out_w = in_size, in_size
@@ -380,7 +369,8 @@ class auxillary_classifier2(nn.Module):
                 self.bn = nn.BatchNorm2d(feature_size)
             else:
                 self.bn = nn.Identity()
-
+        
+        self.blocks = nn.ModuleList(self.blocks)
 
         if mlp_layers > 0:
             if block == "conv":
@@ -427,8 +417,6 @@ class auxillary_classifier2(nn.Module):
                 self.classifier = nn.Linear(feature_size, num_classes)
                 if loss_sup == 'predsim':
                     self.loss_sim = nn.Linear(feature_size, feature_size, bias=False)
-
-
 
     def forward(self, x):
         out = x
