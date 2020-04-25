@@ -75,7 +75,7 @@ parser.add_argument('--no-similarity-std', action='store_true', default=False,
                     help='disable use of standard deviation in similarity matrix for feature maps')
 parser.add_argument('--aux-type', default='nokland',
                     help='nonlinearity, relu or leakyrelu (default: relu)')
-parser.add_argument('--n_mlp', type=int, default=0,
+parser.add_argument('--n-mlp', type=int, default=0,
                     help='number of hidden fully-connected layers for mlp and vgg models (default: 1')
 parser.add_argument('--lr-decay-epoch', type=int, default=80,
                     help='epoch to decay sgd learning rate (default: 80)')
@@ -84,7 +84,7 @@ parser.add_argument('--n-conv',  default=0,type=int,
 parser.add_argument('--lr-schd', default='nokland',
                     help='nokland or cyclic (default: nokland)')
 parser.add_argument('--base-lr', type=float, default=1e-4, help='block size')
-parser.add_argument('--lr-schedule', nargs='+', type=float, default=[1e-2,1e-3, 5e-4, 1e-4])
+parser.add_argument('--lr-schedule', nargs='+', type=float, default=[1e-2, 1e-3, 5e-4, 1e-4])
 parser.add_argument('--gamma', type=float, default=0.95,
                     help='learning rate decay factor to use at milestone epochs (default: 0.25)')
 parser.add_argument('--pooling', default="avg", help='pooling type')
