@@ -147,8 +147,6 @@ class Auxillery(nn.Module):
                 dim_in_decoder_arg)
         
 
-
-
         if auxillery_linear == "conv":
             for n in range(nlin):
                 if n == 0:
@@ -462,6 +460,8 @@ class auxillary_classifier2(nn.Module):
             #                         kernel_size=1, stride=1, padding=0, bias=False)
 
             #    self.blocks.append(nn.Sequential(conv, bn_temp, relu_temp))
+            #
+
 
             if loss_sup == 'pred' or loss_sup == 'predsim':
                 # Resolve average-pooling kernel size in order for flattened dim to match args.dim_in_decoder
@@ -483,8 +483,6 @@ class auxillary_classifier2(nn.Module):
                 else:
                     self.pool = nn.Identity()
 
-            if loss_sup == 'predsim':
-                self.sim_loss = nn.Conv2d(feature_size, feature_size, 3, stride=1, padding=1, bias=False)
             if nlin == 0 and mlp_layers == 0:
                 dim_in_decoder = dim_in_decoder
             else:
@@ -531,6 +529,8 @@ class auxillary_classifier2(nn.Module):
             #self.preclassifier = nn.Identity()
             self.classifier = nn.Linear(dim_in_decoder, num_classes)
             self.classifier.weight.data.zero_()
+            if loss_sup == 'predsim':
+                self.sim_loss = nn.Conv2d(feature_size, feature_size, 3, stride=1, padding=1, bias=False)
         else:
             self.pool = nn.Identity()
             #self.bn = nn.Identity()
