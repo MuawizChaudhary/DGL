@@ -348,7 +348,6 @@ class auxillary_conv_classifier(nn.Module):
         
 
         for n in range(self.nlin):
-
             if bn:
                 bn_temp = nn.BatchNorm2d(feature_size)
             else:
@@ -392,28 +391,24 @@ class auxillary_conv_classifier(nn.Module):
             self.pool = nn.AdaptiveAvgPool2d((2, 2))
 
         self.blocks = nn.ModuleList(self.blocks)
+
         if not bn:
             self.bn = nn.Identity()
         else:
             self.bn = nn.BatchNorm2d(feature_size)
 
-
-
         if mlp_layers > 0:
-            mlp_feat = feature_size * (2) * (2)
+            mlp_feat = self.dim_in_decoder
+
             layers = []
 
             for l in range(mlp_layers):
-                if l == 0:
-                    in_feat = feature_size * 4
-                    mlp_feat = mlp_feat
-                else:
-                    in_feat = mlp_feat
+                
                 if bn:
                     bn_temp = nn.BatchNorm1d(mlp_feat)
                 else:
                     bn_temp = nn.Identity()
-                layers += [nn.Linear(in_feat, mlp_feat),
+                layers += [nn.Linear(mlp_feat, mlp_feat),
                            bn_temp, nn.ReLU(True)]
             self.mlp = True
             self.preclassifier = nn.Sequential(*layers)
