@@ -79,7 +79,7 @@ parser.add_argument('--mlp-layers', type=int, default=0,
                     help='number of hidden fully-connected layers for mlp and vgg models (default: 1')
 parser.add_argument('--lr-decay-epoch', type=int, default=80,
                     help='epoch to decay sgd learning rate (default: 80)')
-parser.add_argument('--nlin',  default=0,type=int,
+parser.add_argument('--n-conv',  default=0,type=int,
                     help='number of conv layers in aux classifiers')
 parser.add_argument('--lr-schd', default='nokland',
                     help='nokland or cyclic (default: nokland)')
@@ -198,22 +198,22 @@ def main():
         model = VGGn(args.model, feat_mult=args.feat_mult, dropout=args.dropout,nonlin=args.nonlin, no_similarity_std=args.no_similarity_std,
                       loss_sup= args.loss_sup, dim_in_decoder=args.dim_in_decoder, num_layers=args.num_layers,
             num_hidden = args.num_hidden, aux_type=args.aux_type,
-            mlp_layers=args.mlp_layers, nlin=args.nlin, pooling=args.pooling,
+            mlp_layers=args.mlp_layers, n_conv=args.n_conv, pooling=args.pooling,
             bn=args.bn, aux_bn=args.aux_bn)
     elif args.model == 'resnet18':
-        model = resnet18(nlin=args.nlin, mlp=args.mlp_layers,
+        model = resnet18(n_conv=args.n_conv, mlp=args.mlp_layers,
                                        block_size=args.block_size)
     elif args.model == 'resnet34':
-        model = resnet34(nlin=args.nlin, mlp=args.mlp_layers,
+        model = resnet34(n_conv=args.n_conv, mlp=args.mlp_layers,
                                        block_size=args.block_size)
     elif args.model == 'resnet50':
-        model = resnet50(nlin=args.nlin, mlp=args.mlp_layers,
+        model = resnet50(n_conv=args.n_conv, mlp=args.mlp_layers,
                                        block_size=args.block_size)
     elif args.model == 'resnet101':
-        model = resnet101(nlin=args.nlin, mlp=args.mlp_layers,
+        model = resnet101(n_conv=args.n_conv, mlp=args.mlp_layers,
                                        block_size=args.block_size)
     elif args.model == 'resnet152':
-        model = resnet152(nlin=args.nlin, mlp=args.mlp_layers,
+        model = resnet152(n_conv=args.n_conv, mlp=args.mlp_layers,
                                        block_size=args.block_size)
     else:
         print('No valid model defined')

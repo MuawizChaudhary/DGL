@@ -155,7 +155,7 @@ class Net(nn.Module):
     def __init__(self, num_layers, num_hidden, input_dim, input_ch,
                  num_classes, no_similarity_std, dropout=0.0, nonlin='relu',
                  loss_sup="predsim", dim_in_decoder=2048, 
-                 aux_type="nokland", mlp_layers=0, nlin=0, bn=False,
+                 aux_type="nokland", mlp_layers=0, n_conv=0, bn=False,
                  aux_bn=False):
         super(Net, self).__init__()
 
@@ -228,7 +228,7 @@ class VGGn(nn.Module):
                  loss_sup="predsim", dim_in_decoder=2048,
                  num_layers=0, num_hidden=1024,
                  aux_type="nokland", mlp_layers=0,
-                 nlin=0, pooling="avg", bn=True, aux_bn=False):
+                 n_conv=0, pooling="avg", bn=True, aux_bn=False):
         super(VGGn, self).__init__()
         self.cfg = cfg[vggname]
         self.input_dim = input_dim
@@ -241,7 +241,7 @@ class VGGn(nn.Module):
         self.dim_in_decoder = dim_in_decoder
         self.aux_type = aux_type
         self.mlp_layers = mlp_layers
-        self.nlin = nlin
+        self.n_conv = n_conv
         self.pooling = pooling
         self.bn = bn
         self.aux_bn = aux_bn
@@ -257,7 +257,7 @@ class VGGn(nn.Module):
                              self.no_similarity_std, self.dropout, nonlin=nonlin,
                              loss_sup=loss_sup, dim_in_decoder=dim_in_decoder,
                              aux_type=aux_type, mlp_layers=mlp_layers,
-                             nlin=nlin, bn=bn, aux_bn=aux_bn)
+                             n_conv=n_conv, bn=bn, aux_bn=aux_bn)
             features.extend([*classifier.layers])
             auxillery_layers.extend([*classifier.auxillery_layers])
         else:
@@ -298,7 +298,7 @@ class VGGn(nn.Module):
                     auxillery_layers += [auxillary_conv_classifier(x, input_dim // scale_cum,
                                 cnn=False, num_classes=self.num_classes,
                                 mlp_layers=self.mlp_layers,
-                                nlin=self.nlin, loss_sup=self.loss_sup,
+                                n_conv=self.n_conv, loss_sup=self.loss_sup,
                                 dim_in_decoder_arg=self.dim_in_decoder,
                                 pooling=self.pooling, bn=self.aux_bn)]
                 else:
@@ -313,7 +313,7 @@ class VGGn(nn.Module):
                     auxillery_layers += [auxillary_conv_classifier(x, input_dim // scale_cum,
                                 cnn=False, num_classes=self.num_classes,
                                 mlp_layers=self.mlp_layers,
-                                nlin=self.nlin, loss_sup=self.loss_sup,
+                                n_conv=self.n_conv, loss_sup=self.loss_sup,
                                 dim_in_decoder_arg = self.dim_in_decoder,
                                 pooling=self.pooling, bn=self.aux_bn)]
 
@@ -326,11 +326,11 @@ class VGGn(nn.Module):
 
 class auxillary_conv_classifier(nn.Module):
     def __init__(self, input_features=256, in_size=32, cnn=False,
-                 num_classes=10, nlin=0, mlp_layers=0, block="conv",
+                 num_classes=10, n_conv=0, mlp_layers=0, block="conv",
                  loss_sup="pred", dim_in_decoder_arg=2048, pooling="avg",
                  bn=False):
         super(auxillary_conv_classifier, self).__init__()
-        self.nlin = nlin
+        self.n_conv = n_conv
         self.in_size = in_size
         self.cnn = cnn
         feature_size = input_features
@@ -347,7 +347,7 @@ class auxillary_conv_classifier(nn.Module):
         self.pool = nn.Identity()
         
 
-        for n in range(self.nlin):
+        for n in range(self.n_conv):
             if bn:
                 bn_temp = nn.BatchNorm2d(feature_size)
             else:
@@ -437,7 +437,7 @@ class auxillary_conv_classifier(nn.Module):
             x = F.adaptive_avg_pool2d(x, (math.ceil(self.in_size / 4), math.ceil(self.in_size / 4)))
 
         if self.block == "conv":
-            for n in range(self.nlin):
+            for n in range(self.n_conv):
                 x = self.blocks[n](x)
                 #out = self.dropout(out)
 
