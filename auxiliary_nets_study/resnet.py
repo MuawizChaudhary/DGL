@@ -7,7 +7,7 @@ from functools import partial
 
 __all__ = ['resnet152']
 
-from models import auxillary_classifier2
+#from models import auxillary_classifier2
 
 
 class View(nn.Module):
