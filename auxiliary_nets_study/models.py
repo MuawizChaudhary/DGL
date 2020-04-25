@@ -134,13 +134,41 @@ class LocalLossBlockConv(nn.Module):
 
 class Auxillery(nn.Module):
     def __init__(self, auxillery_linear, dim_out, num_classes, num_out,
-                 no_similarity_std, loss_sup, dim_in_decoder_arg):
+                 no_similarity_std, loss_sup, dim_in_decoder_arg, nlin,
+                 mlp_layers):
         super(Auxillery, self).__init__()
 
         self.no_similarity_std = no_similarity_std
         self.loss_sup = loss_sup
+        
+        self.blocks = []
+        self.mlp = False
+        print(dim_out, num_out, num_classes, nlin, mlp_layers,
+                dim_in_decoder_arg)
+        
+
+
 
         if auxillery_linear == "conv":
+            for n in range(nlin):
+                if n == 0:
+                    input_features = num_out
+                else:
+                    input_features = input_features
+
+                bn_temp = nn.BatchNorm2d(feature_size)
+                relu_temp = nn.ReLU(True)
+
+                if cnn:
+                    conv = nn.Conv2d(input_features, feature_size,
+                                     kernel_size=3, stride=1, padding=1, bias=False)
+                else:
+                    conv = nn.Conv2d(input_features, feature_size,
+                                     kernel_size=1, stride=1, padding=0, bias=False)
+
+                self.blocks.append(nn.Sequential(conv, bn_temp, relu_temp))
+
+
             if loss_sup == 'pred' or loss_sup == 'predsim':
                 # Resolve average-pooling kernel size in order for flattened dim to match args.dim_in_decoder
                 ks_h, ks_w = 1, 1
@@ -160,11 +188,16 @@ class Auxillery(nn.Module):
                     self.avg_pool = nn.AvgPool2d((ks_h, ks_w), padding=(pad_h, pad_w))
                 else:
                     self.avg_pool = nn.Identity()
+            if nlin == 0 and mlp_layers == 0:
+                dim_in_decoder = dim_in_decoder
+            else:
+                dim_in_decoder = feature_size*4
             if loss_sup == 'pred' or loss_sup == 'predsim':
                 self.decoder_y = nn.Linear(dim_in_decoder, num_classes)
                 self.decoder_y.weight.data.zero_()
             if loss_sup == 'predsim':
                 self.sim_loss = nn.Conv2d(num_out, num_out, 3, stride=1, padding=1, bias=False)
+
         else:
             self.avg_pool = nn.Identity()
             if loss_sup == 'pred' or loss_sup == 'predsim':
@@ -172,6 +205,9 @@ class Auxillery(nn.Module):
                 self.decoder_y.weight.data.zero_()
             if loss_sup == 'predsim':
                 self.sim_loss = nn.Linear(num_out, num_out, bias=False)
+
+        self.blocks = nn.ModuleList(self.blocks)
+
 
     def forward(self, x):
         sim_output = None
@@ -219,14 +255,15 @@ class Net(nn.Module):
                                                           first_layer=True)])
         if aux_type == "dgl":
             self.auxillery_layers = nn.ModuleList([auxillary_classifier2(num_hidden,
-                input_dim, cnn=False,
+                num_hidden, cnn=False,
                 num_classes=num_classes, nlin=nlin,
-                mlp_layers=mlp_layers, block="linear", loss_sup=loss_sup)])
+                mlp_layers=mlp_layers, block="linear", loss_sup=loss_sup,
+                dim_in_decoder_arg=dim_in_decoder)])
         else:
             self.auxillery_layers = nn.ModuleList([Auxillery("linear", num_hidden,
                 num_classes, num_hidden,
                 no_similarity_std, loss_sup,
-                dim_in_decoder)])
+                dim_in_decoder, nlin, mlp_layers)])
 
         for i in range(1, num_layers):
             layer = LocalLossBlockLinear(int(num_hidden // (reduce_factor ** (i - 1))),
@@ -350,11 +387,14 @@ class VGGn(nn.Module):
                         auxillery_layers += [auxillary_classifier2(x, input_dim // scale_cum,
                                 cnn=False, num_classes=self.num_classes,
                                 mlp_layers=self.mlp_layers,
-                                nlin=self.nlin, loss_sup=self.loss_sup)]
+                                nlin=self.nlin, loss_sup=self.loss_sup,
+                                dim_in_decoder_arg=self.dim_in_decoder)]
                     else:
                         auxillery_layers += [Auxillery("conv", input_dim // scale_cum,
                                                    self.num_classes, x, self.no_similarity_std,
-                                                   self.loss_sup, self.dim_in_decoder)]
+                                                   self.loss_sup,
+                                                   self.dim_in_decoder,
+                                                   self.nlin, self.mlp_layers)]
                 else:
                     layers += [LocalLossBlockConv(input_ch, x, kernel_size=3, stride=1, padding=1,
                                                   num_classes=self.num_classes,
@@ -367,11 +407,14 @@ class VGGn(nn.Module):
                         auxillery_layers += [auxillary_classifier2(x, input_dim // scale_cum,
                                 cnn=False, num_classes=self.num_classes,
                                 mlp_layers=self.mlp_layers,
-                                nlin=self.nlin, loss_sup=self.loss_sup)]
+                                nlin=self.nlin, loss_sup=self.loss_sup,
+                                dim_in_decoder_arg = self.dim_in_decoder)]
                     else:
                         auxillery_layers += [Auxillery("conv", input_dim // scale_cum,
                                                    self.num_classes, x, self.no_similarity_std,
-                                                   self.loss_sup, self.dim_in_decoder)]
+                                                   self.loss_sup,
+                                                   self.dim_in_decoder,
+                                                   self.nlin, self.mlp_layers)]
 
                 input_ch = x
                 first_layer = False
@@ -383,10 +426,10 @@ class VGGn(nn.Module):
 class auxillary_classifier2(nn.Module):
     def __init__(self, input_features=256, in_size=32, cnn=False,
                  num_classes=10, nlin=0, mlp_layers=0, block="conv",
-                 loss_sup="pred"):
+                 loss_sup="pred", dim_in_decoder_arg=2048):
         super(auxillary_classifier2, self).__init__()
-        self.nlin = nlin
-        self.in_size = in_size
+        self.nlin = 0#nlin
+        self.in_size = input_features#in_size
         self.cnn = cnn
         feature_size = input_features
         self.loss_sup = loss_sup
@@ -395,103 +438,150 @@ class auxillary_classifier2(nn.Module):
         # TODO make argument
         # self.dropout_p = 0.2
         # self.dropout = torch.nn.Dropout2d(p=self.dropout_p, inplace=False)
+        input_features = in_size
+        in_size = feature_size
+        print(input_features, in_size, num_classes, nlin, mlp_layers,
+                dim_in_decoder_arg)
         
 
         if block == "conv":
-            for n in range(self.nlin):
-                if n == 0:
-                    input_features = input_features
+            #for n in range(self.nlin):
+            #    if n == 0:
+            #        input_features = input_features
+            #    else:
+            #        input_features = feature_size
+
+            #    bn_temp = nn.BatchNorm2d(feature_size)
+            #    relu_temp = nn.ReLU(True)
+
+            #    if cnn:
+            #        conv = nn.Conv2d(input_features, feature_size,
+            #                         kernel_size=3, stride=1, padding=1, bias=False)
+            #    else:
+            #        conv = nn.Conv2d(input_features, feature_size,
+            #                         kernel_size=1, stride=1, padding=0, bias=False)
+
+            #    self.blocks.append(nn.Sequential(conv, bn_temp, relu_temp))
+
+            if loss_sup == 'pred' or loss_sup == 'predsim':
+                # Resolve average-pooling kernel size in order for flattened dim to match args.dim_in_decoder
+                ks_h, ks_w = 1, 1
+                dim_out_h, dim_out_w = input_features, input_features
+                dim_in_decoder = in_size * dim_out_h * dim_out_w
+                while dim_in_decoder > dim_in_decoder_arg and ks_h < input_features:
+                    ks_h *= 2
+                    dim_out_h = math.ceil(input_features / ks_h)
+                    dim_in_decoder = in_size * dim_out_h * dim_out_w
+                    if dim_in_decoder > dim_in_decoder_arg:
+                        ks_w *= 2
+                        dim_out_w = math.ceil(input_features / ks_w)
+                        dim_in_decoder = in_size * dim_out_h * dim_out_w
+                if ks_h > 1 or ks_w > 1:
+                    pad_h = (ks_h * (dim_out_h - input_features // ks_h)) // 2
+                    pad_w = (ks_w * (dim_out_w - input_features // ks_w)) // 2
+                    self.pool = nn.AvgPool2d((ks_h, ks_w), padding=(pad_h, pad_w))
                 else:
-                    input_features = feature_size
+                    self.pool = nn.Identity()
 
-                bn_temp = nn.BatchNorm2d(feature_size)
-                relu_temp = nn.ReLU(True)
-
-                if cnn:
-                    conv = nn.Conv2d(input_features, feature_size,
-                                     kernel_size=3, stride=1, padding=1, bias=False)
-                else:
-                    conv = nn.Conv2d(input_features, feature_size,
-                                     kernel_size=1, stride=1, padding=0, bias=False)
-
-                self.blocks.append(nn.Sequential(conv, bn_temp, relu_temp))
             if loss_sup == 'predsim':
-                self.loss_sim = nn.Conv2d(feature_size, feature_size, 3, stride=1, padding=1, bias=False)
-
-
-        self.blocks = nn.ModuleList(self.blocks)
-
-        if block == "conv" and (nlin > 0 or mlp_layers > 0):
-            self.adaptive_avg_pool = nn.AdaptiveAvgPool2d((2, 2))
-            self.bn = nn.BatchNorm2d(feature_size)
-
-        if mlp_layers > 0:
-            if block == "conv":
-                mlp_feat = feature_size * (2) * (2)
+                self.sim_loss = nn.Conv2d(feature_size, feature_size, 3, stride=1, padding=1, bias=False)
+            if nlin == 0 and mlp_layers == 0:
+                dim_in_decoder = dim_in_decoder
             else:
-                mlp_feat = feature_size
+                dim_in_decoder = feature_size*4
+            #self.blocks = nn.ModuleList(self.blocks)
 
-            layers = []
+        # take into account if cnn or not
+        #if nlin > 0 or mlp_layers > 0:
+        #    self.pool = nn.AdaptiveAvgPool2d((2, 2))
+        #    self.bn = nn.BatchNorm2d(feature_size)
+        #elif block != 'conv':
+        #    self.pool = nn.Identity()
+        #    self.bn = nn.Identity()
 
-            for l in range(mlp_layers):
-                if l == 0 and block == "conv":
-                    in_feat = feature_size * 4
-                    mlp_feat = mlp_feat
-                else:
-                    in_feat = mlp_feat
 
-                bn_temp = nn.BatchNorm1d(mlp_feat)
-                layers += [nn.Linear(in_feat, mlp_feat),
-                           bn_temp, nn.ReLU(True)]
-            
-            if self.loss_sup == "predsim" and block == "linear":
-                self.loss_sim = nn.Linear(feature_size, feature_size, bias=False)
-            self.preclassifier = nn.Sequential(*layers)
+        #if mlp_layers > 0:
+            #if block == "conv":
+            #    mlp_feat = feature_size * (2) * (2)
+            #else:
+            #    mlp_feat = feature_size
 
-            self.classifier = nn.Linear(mlp_feat, num_classes)
-            self.mlp = True
+            #layers = []
+
+            #for l in range(mlp_layers):
+            #    if l == 0 and block == "conv":
+            #        in_feat = feature_size * 4
+            #        mlp_feat = mlp_feat
+            #    else:
+            #        in_feat = mlp_feat
+
+            #    bn_temp = nn.BatchNorm1d(mlp_feat)
+            #    layers += [nn.Linear(in_feat, mlp_feat),
+            #               bn_temp, nn.ReLU(True)]
+            #
+            #if self.loss_sup == "predsim" and block == "linear":
+            #    self.loss_sim = nn.Linear(feature_size, feature_size, bias=False)
+            #self.preclassifier = nn.Sequential(*layers)
+
+            #self.classifier = nn.Linear(mlp_feat, num_classes)
+            #self.mlp = True
+        #else:
+        self.mlp = False
+        if block == "conv":
+            #self.preclassifier = nn.Identity()
+            self.classifier = nn.Linear(dim_in_decoder, num_classes)
+            self.classifier.weight.data.zero_()
         else:
-            self.mlp = False
-            if block == "conv":
-                self.preclassifier = nn.Identity()
-                self.classifier = nn.Linear(feature_size*4, num_classes)
-                
-            else:
-                self.preclassifier = nn.Identity()
-                self.classifier = nn.Linear(feature_size, num_classes)
-                if loss_sup == 'predsim':
-                    self.loss_sim = nn.Linear(feature_size, feature_size, bias=False)
+            self.pool = nn.Identity()
+            #self.bn = nn.Identity()
+            #self.preclassifier = nn.Identity()
+            self.classifier = nn.Linear(feature_size, num_classes)
+            self.classifier.weight.data.zero_()
+            if loss_sup == 'predsim':
+                self.sim_loss = nn.Linear(feature_size, feature_size, bias=False)
 
 
 
     def forward(self, x):
-        out = x
-        loss_sim = None
-        if not self.cnn and self.block == "conv":
-            # First reduce the size by 16
-            out = F.adaptive_avg_pool2d(out, (math.ceil(self.in_size / 4), math.ceil(self.in_size / 4)))
+        #out = x
+        #out = None
+        #loss_sim = None
+        sim_output = None
+        pred_output = None
+        #if not self.cnn and self.block == "conv":
+        #    # First reduce the size by 16
+        #    out = F.adaptive_avg_pool2d(out, (math.ceil(self.in_size / 4), math.ceil(self.in_size / 4)))
 
-        if self.block == "conv":
-            for n in range(self.nlin):
-                out = self.blocks[n](out)
-                #out = self.dropout(out)
-            if self.loss_sup == "predsim":
-                loss_sim = self.loss_sim(out)
-                loss_sim = similarity_matrix(loss_sim, False)
-
-
-        if self.block == "conv":
-            out = self.adaptive_avg_pool(out)
-
-        if not self.mlp and self.block == "conv":
-            out = self.bn(out)
-        out = out.view(out.size(0), -1)
-        out = self.preclassifier(out)
-
-        if self.loss_sup == "predsim" and self.block != "conv":
-            loss_sim = self.loss_sim(out)
-            loss_sim = similarity_matrix(loss_sim, False)
+        #if self.block == "conv":
+        #    for n in range(self.nlin):
+        #        out = self.blocks[n](out)
+        #        #out = self.dropout(out)
+        #if self.loss_sup == "predsim":
+        #    loss_sim = self.loss_sim(x)
+        #    loss_sim = similarity_matrix(loss_sim, False)
 
 
-        out = self.classifier(out)
-        return (loss_sim, out)
+        #if self.block == "conv":
+        #out = self.pool(x)
+
+        #if not self.mlp and self.block == "conv":
+        #    out = self.bn(out)
+        #out = out.view(out.size(0), -1)
+        #out = self.preclassifier(out)
+
+        if self.loss_sup == 'sim':
+            x_loss = self.sim_loss(x)
+            sim_output = similarity_matrix(x_loss, False)
+        elif self.loss_sup == 'pred':
+            x = self.pool(x)
+            pred_output = self.classifier(x.view(x.size(0), -1))
+        elif self.loss_sup == 'predsim':
+            x_loss = self.sim_loss(x)
+            sim_output = similarity_matrix(x_loss, False)
+            x = self.pool(x)
+            pred_output = self.classifier(x.view(x.size(0), -1))
+
+        return (sim_output, pred_output)
+        #out = self.classifier(out)
+        
+        #return (loss_sim, out)

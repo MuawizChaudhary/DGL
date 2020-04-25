@@ -79,7 +79,7 @@ parser.add_argument('--mlp-layers', type=int, default=0,
                     help='number of hidden fully-connected layers for mlp and vgg models (default: 1')
 parser.add_argument('--lr-decay-epoch', type=int, default=80,
                     help='epoch to decay sgd learning rate (default: 80)')
-parser.add_argument('--nlin',  default=3,type=int,
+parser.add_argument('--nlin',  default=0,type=int,
                     help='number of conv layers in aux classifiers')
 parser.add_argument('--lr-schd', default='nokland',
                     help='nokland or cyclic (default: nokland)')
@@ -100,9 +100,9 @@ import git
 repo = git.Repo(search_parent_directories=True)
 sha = repo.head.object.hexsha
 print(filename)
-sys.stdout = open(filename, "w",buffering=1)
+#sys.stdout = open(filename, "w",buffering=1)
 print(sha)
-print(" ".join(str(item) for item in sys.argv[0:]))
+#print(" ".join(str(item) for item in sys.argv[0:]))
 print(filename)
 
 
