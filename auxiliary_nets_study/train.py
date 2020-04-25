@@ -75,7 +75,7 @@ parser.add_argument('--no-similarity-std', action='store_true', default=False,
                     help='disable use of standard deviation in similarity matrix for feature maps')
 parser.add_argument('--aux-type', default='nokland',
                     help='nonlinearity, relu or leakyrelu (default: relu)')
-parser.add_argument('--mlp-layers', type=int, default=0,
+parser.add_argument('--n_mlp', type=int, default=0,
                     help='number of hidden fully-connected layers for mlp and vgg models (default: 1')
 parser.add_argument('--lr-decay-epoch', type=int, default=80,
                     help='epoch to decay sgd learning rate (default: 80)')
@@ -198,22 +198,22 @@ def main():
         model = VGGn(args.model, feat_mult=args.feat_mult, dropout=args.dropout,nonlin=args.nonlin, no_similarity_std=args.no_similarity_std,
                       loss_sup= args.loss_sup, dim_in_decoder=args.dim_in_decoder, num_layers=args.num_layers,
             num_hidden = args.num_hidden, aux_type=args.aux_type,
-            mlp_layers=args.mlp_layers, n_conv=args.n_conv, pooling=args.pooling,
+            n_mlp=args.n_mlp, pooling=args.pooling,
             bn=args.bn, aux_bn=args.aux_bn)
     elif args.model == 'resnet18':
-        model = resnet18(n_conv=args.n_conv, mlp=args.mlp_layers,
+        model = resnet18(n_conv=args.n_conv, mlp=args.n_mlp,
                                        block_size=args.block_size)
     elif args.model == 'resnet34':
-        model = resnet34(n_conv=args.n_conv, mlp=args.mlp_layers,
+        model = resnet34(n_conv=args.n_conv, mlp=args.n_mlp,
                                        block_size=args.block_size)
     elif args.model == 'resnet50':
-        model = resnet50(n_conv=args.n_conv, mlp=args.mlp_layers,
+        model = resnet50(n_conv=args.n_conv, mlp=args.n_mlp,
                                        block_size=args.block_size)
     elif args.model == 'resnet101':
-        model = resnet101(n_conv=args.n_conv, mlp=args.mlp_layers,
+        model = resnet101(n_conv=args.n_conv, mlp=args.n_mlp,
                                        block_size=args.block_size)
     elif args.model == 'resnet152':
-        model = resnet152(n_conv=args.n_conv, mlp=args.mlp_layers,
+        model = resnet152(n_conv=args.n_conv, mlp=args.n_mlp,
                                        block_size=args.block_size)
     else:
         print('No valid model defined')

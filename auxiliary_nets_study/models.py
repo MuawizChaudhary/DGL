@@ -155,7 +155,7 @@ class Net(nn.Module):
     def __init__(self, num_layers, num_hidden, input_dim, input_ch,
                  num_classes, no_similarity_std, dropout=0.0, nonlin='relu',
                  loss_sup="predsim", dim_in_decoder=2048, 
-                 aux_type="nokland", mlp_layers=0, n_conv=0, bn=False,
+                 aux_type="nokland", n_mlp=0, bn=False,
                  aux_bn=False):
         super(Net, self).__init__()
 
@@ -170,7 +170,7 @@ class Net(nn.Module):
 
         self.auxillery_layers = nn.ModuleList([auxillary_linear_classifier(num_hidden,
                 num_classes=num_classes,
-                mlp_layers=mlp_layers, 
+                n_mlp=n_mlp, 
                 loss_sup=loss_sup, bn=aux_bn)])
 
         for i in range(1, num_layers):
@@ -227,8 +227,8 @@ class VGGn(nn.Module):
                  feat_mult=1, dropout=0.0, nonlin="relu", no_similarity_std=False,
                  loss_sup="predsim", dim_in_decoder=2048,
                  num_layers=0, num_hidden=1024,
-                 aux_type="nokland", mlp_layers=0,
-                 n_conv=0, pooling="avg", bn=True, aux_bn=False):
+                 aux_type="nokland", n_mlp=0,
+                 pooling="avg", bn=True, aux_bn=False):
         super(VGGn, self).__init__()
         self.cfg = cfg[vggname]
         self.input_dim = input_dim
@@ -240,8 +240,7 @@ class VGGn(nn.Module):
         self.loss_sup = loss_sup
         self.dim_in_decoder = dim_in_decoder
         self.aux_type = aux_type
-        self.mlp_layers = mlp_layers
-        self.n_conv = n_conv
+        self.n_mlp = n_mlp
         self.pooling = pooling
         self.bn = bn
         self.aux_bn = aux_bn
@@ -256,8 +255,8 @@ class VGGn(nn.Module):
                              int(output_ch * feat_mult), num_classes,
                              self.no_similarity_std, self.dropout, nonlin=nonlin,
                              loss_sup=loss_sup, dim_in_decoder=dim_in_decoder,
-                             aux_type=aux_type, mlp_layers=mlp_layers,
-                             n_conv=n_conv, bn=bn, aux_bn=aux_bn)
+                             aux_type=aux_type, n_mlp=n_mlp,
+                             bn=bn, aux_bn=aux_bn)
             features.extend([*classifier.layers])
             auxillery_layers.extend([*classifier.auxillery_layers])
         else:
@@ -297,8 +296,8 @@ class VGGn(nn.Module):
 
                     auxillery_layers += [auxillary_conv_classifier(x, input_dim // scale_cum,
                                 cnn=False, num_classes=self.num_classes,
-                                mlp_layers=self.mlp_layers,
-                                n_conv=self.n_conv, loss_sup=self.loss_sup,
+                                n_mlp=self.n_mlp,
+                                loss_sup=self.loss_sup,
                                 dim_in_decoder_arg=self.dim_in_decoder,
                                 pooling=self.pooling, bn=self.aux_bn)]
                 else:
@@ -312,8 +311,8 @@ class VGGn(nn.Module):
 
                     auxillery_layers += [auxillary_conv_classifier(x, input_dim // scale_cum,
                                 cnn=False, num_classes=self.num_classes,
-                                mlp_layers=self.mlp_layers,
-                                n_conv=self.n_conv, loss_sup=self.loss_sup,
+                                n_mlp=self.n_mlp,
+                                loss_sup=self.loss_sup,
                                 dim_in_decoder_arg = self.dim_in_decoder,
                                 pooling=self.pooling, bn=self.aux_bn)]
 
@@ -326,11 +325,10 @@ class VGGn(nn.Module):
 
 class auxillary_conv_classifier(nn.Module):
     def __init__(self, input_features=256, in_size=32, cnn=False,
-                 num_classes=10, n_conv=0, mlp_layers=0, block="conv",
+                 num_classes=10, n_mlp=0, block="conv",
                  loss_sup="pred", dim_in_decoder_arg=2048, pooling="avg",
                  bn=False):
         super(auxillary_conv_classifier, self).__init__()
-        self.n_conv = n_conv
         self.in_size = in_size
         self.cnn = cnn
         feature_size = input_features
@@ -346,23 +344,6 @@ class auxillary_conv_classifier(nn.Module):
         self.pooling = pooling
         self.pool = nn.Identity()
         
-
-        for n in range(self.n_conv):
-            if bn:
-                bn_temp = nn.BatchNorm2d(feature_size)
-            else:
-                bn_temp = nn.Identity()
-
-            relu_temp = nn.ReLU(True)
-
-            if cnn:
-                conv = nn.Conv2d(feature_size, feature_size,
-                                 kernel_size=3, stride=1, padding=1, bias=False)
-            else:
-                conv = nn.Conv2d(feature_size, feature_size,
-                                 kernel_size=1, stride=1, padding=0, bias=False)
-
-            self.blocks.append(nn.Sequential(conv, bn_temp, relu_temp))
 
         if (loss_sup == 'pred' or loss_sup == 'predsim') and pooling == "avg":
             # Resolve average-pooling kernel size in order for flattened dim to match args.dim_in_decoder
@@ -397,12 +378,12 @@ class auxillary_conv_classifier(nn.Module):
         else:
             self.bn = nn.BatchNorm2d(feature_size)
 
-        if mlp_layers > 0:
+        if n_mlp > 0:
             mlp_feat = self.dim_in_decoder
 
             layers = []
 
-            for l in range(mlp_layers):
+            for l in range(n_mlp):
                 
                 if bn:
                     bn_temp = nn.BatchNorm1d(mlp_feat)
@@ -436,11 +417,6 @@ class auxillary_conv_classifier(nn.Module):
         if not self.cnn and self.pooling == 'adapativeavg':
             x = F.adaptive_avg_pool2d(x, (math.ceil(self.in_size / 4), math.ceil(self.in_size / 4)))
 
-        if self.block == "conv":
-            for n in range(self.n_conv):
-                x = self.blocks[n](x)
-                #out = self.dropout(out)
-
         out = self.pool(x)
         out = self.bn(out)
         out = out.view(out.size(0), -1)
@@ -451,17 +427,17 @@ class auxillary_conv_classifier(nn.Module):
 
 class auxillary_linear_classifier(nn.Module):
     def __init__(self, input_features=256,
-                 num_classes=10, mlp_layers=0, 
+                 num_classes=10, n_mlp=0, 
                  loss_sup="pred", bn=False):
         super(auxillary_linear_classifier, self).__init__()
         feature_size = input_features
         self.loss_sup = loss_sup
 
-        if mlp_layers > 0:
+        if n_mlp > 0:
             mlp_feat = feature_size
             layers = []
 
-            for l in range(mlp_layers):
+            for l in range(n_mlp):
                 in_feat = mlp_feat
                 if bn:
                     bn_temp = nn.BatchNorm1d(mlp_feat)
