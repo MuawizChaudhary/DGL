@@ -87,7 +87,11 @@ parser.add_argument('--base-lr', type=float, default=1e-4, help='block size')
 parser.add_argument('--lr-schedule', nargs='+', type=float, default=[1e-2,1e-3, 5e-4, 1e-4])
 parser.add_argument('--gamma', type=float, default=0.95,
                     help='learning rate decay factor to use at milestone epochs (default: 0.25)')
-
+parser.add_argument('--pooling', default="avg", help='pooling type')
+parser.add_argument('--bn', action='store_true', default=False,
+                    help='batch norm in main model')
+parser.add_argument('--aux-bn', action='store_true', default=False,
+                    help='batch norm in auxillary layers')
 
 
 args = parser.parse_args()
@@ -194,7 +198,8 @@ def main():
         model = VGGn(args.model, feat_mult=args.feat_mult, dropout=args.dropout,nonlin=args.nonlin, no_similarity_std=args.no_similarity_std,
                       loss_sup= args.loss_sup, dim_in_decoder=args.dim_in_decoder, num_layers=args.num_layers,
             num_hidden = args.num_hidden, aux_type=args.aux_type,
-            mlp_layers=args.mlp_layers, nlin=args.nlin)
+            mlp_layers=args.mlp_layers, nlin=args.nlin, pooling=args.pooling,
+            bn=args.bn, aux_bn=args.aux_bn)
     elif args.model == 'resnet18':
         model = resnet18(nlin=args.nlin, mlp=args.mlp_layers,
                                        block_size=args.block_size)
@@ -268,7 +273,7 @@ def main():
 
         if args.lr_schd == 'nokland' or args.lr_schd == 'step':
             for n in range(n_cnn):
-                layer_lr[n] = lr_scheduler(layer_lr[n], epoch-1, args)
+                layer_lr[n] = lr_scheduler(args.lr, epoch-1, args)
                 optimizer = layer_optim[n]
                 if optimizer is not None: 
                     for param_group in optimizer.param_groups:
