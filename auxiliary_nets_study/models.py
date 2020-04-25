@@ -325,19 +325,14 @@ class VGGn(nn.Module):
 
 class auxillary_conv_classifier(nn.Module):
     def __init__(self, input_features=256, in_size=32, cnn=False,
-                 num_classes=10, n_mlp=0, block="conv",
-                 loss_sup="pred", dim_in_decoder_arg=2048, pooling="avg",
+                 num_classes=10, n_mlp=0, loss_sup="pred", 
+                 dim_in_decoder_arg=2048, pooling="avg",
                  bn=False):
         super(auxillary_conv_classifier, self).__init__()
         self.in_size = in_size
         self.cnn = cnn
         feature_size = input_features
         self.loss_sup = loss_sup
-        self.block = block
-        self.blocks = []
-        # TODO make argument
-        # self.dropout_p = 0.2
-        # self.dropout = torch.nn.Dropout2d(p=self.dropout_p, inplace=False)
         input_features = in_size
         in_size = feature_size
         self.dim_in_decoder = dim_in_decoder_arg
@@ -371,8 +366,6 @@ class auxillary_conv_classifier(nn.Module):
             self.dim_in_decoder = feature_size*4
             self.pool = nn.AdaptiveAvgPool2d((2, 2))
 
-        self.blocks = nn.ModuleList(self.blocks)
-
         if not bn:
             self.bn = nn.Identity()
         else:
@@ -384,7 +377,6 @@ class auxillary_conv_classifier(nn.Module):
             layers = []
 
             for l in range(n_mlp):
-                
                 if bn:
                     bn_temp = nn.BatchNorm1d(mlp_feat)
                 else:
@@ -408,13 +400,11 @@ class auxillary_conv_classifier(nn.Module):
     def forward(self, x):
         out = None
         loss_sim = None
-        
-
         if self.loss_sup == "predsim":
             loss_sim = self.sim_loss(x)
             loss_sim = similarity_matrix(loss_sim, False)
 
-        if not self.cnn and self.pooling == 'adapativeavg':
+        if self.pooling == 'adapativeavg':
             x = F.adaptive_avg_pool2d(x, (math.ceil(self.in_size / 4), math.ceil(self.in_size / 4)))
 
         out = self.pool(x)
@@ -434,6 +424,7 @@ class auxillary_linear_classifier(nn.Module):
         self.loss_sup = loss_sup
 
         if n_mlp > 0:
+            self.mlp = True
             mlp_feat = feature_size
             layers = []
 
@@ -449,17 +440,15 @@ class auxillary_linear_classifier(nn.Module):
             self.preclassifier = nn.Sequential(*layers)
             self.classifier = nn.Linear(mlp_feat, num_classes)
             self.classifier.weight.data.zero_()
+
             if loss_sup == 'predsim':
                 self.sim_loss = nn.Linear(feature_size, feature_size, bias=False)
-            self.mlp = True
-
         else:
             self.mlp = False
-            self.pool = nn.Identity()
-            self.bn = nn.Identity()
             self.preclassifier = nn.Identity()
             self.classifier = nn.Linear(feature_size, num_classes)
             self.classifier.weight.data.zero_()
+
             if loss_sup == 'predsim':
                 self.sim_loss = nn.Linear(feature_size, feature_size, bias=False)
 
