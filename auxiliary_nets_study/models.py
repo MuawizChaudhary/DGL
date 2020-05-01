@@ -383,9 +383,9 @@ class auxillary_conv_classifier(nn.Module):
                     bn_temp = nn.BatchNorm1d(mlp_feat)
                 else:
                     bn_temp = nn.Identity()
-                dropout = torch.nn.Dropout2d(p=dropout, inplace=False)
+                dropout_temp = torch.nn.Dropout2d(p=dropout, inplace=False)
                 layers += [nn.Linear(mlp_feat, mlp_feat),
-                           bn_temp, nn.ReLU(True), dropout]
+                           bn_temp, nn.ReLU(True), dropout_temp]
             self.mlp = True
             self.preclassifier = nn.Sequential(*layers)
             self.classifier = nn.Linear(mlp_feat, num_classes)
@@ -437,9 +437,9 @@ class auxillary_linear_classifier(nn.Module):
                     bn_temp = nn.BatchNorm1d(mlp_feat)
                 else:
                     bn_temp = nn.Identity()
-                dropout = torch.nn.Dropout(p=dropout, inplace=False)
+                dropout_temp = torch.nn.Dropout(p=dropout, inplace=False)
                 layers += [nn.Linear(in_feat, mlp_feat),
-                           bn_temp, nn.ReLU(True), dropout]
+                           bn_temp, nn.ReLU(True), dropout_temp]
 
             self.preclassifier = nn.Sequential(*layers)
             self.classifier = nn.Linear(mlp_feat, num_classes)
