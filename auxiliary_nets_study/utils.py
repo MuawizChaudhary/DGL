@@ -135,7 +135,7 @@ def validate(val_loader, model, epoch, n, loss_sup, iscuda):
             #output = output[1]
             if isinstance(output, tuple):
                 output = output[1]
-            if isinstance(model.main_cnn.blocks[n], nn.Linear):
+            if isinstance(model.module.main_cnn.blocks[n], nn.Linear):
                output = representation
 
             # measure accuracy and record loss
@@ -146,6 +146,57 @@ def validate(val_loader, model, epoch, n, loss_sup, iscuda):
             top1.update(float(prec1[0]), float(input.size(0)))
 
             total += input.size(0)
-        wandb.log({"Layer " + str(n) + " test loss": losses.avg}, step=epoch)
-        wandb.log({"Layer " + str(n) + " top1": top1.avg}, step=epoch)
+        #wandb.log({"Layer " + str(n) + " test loss": losses.avg}, step=epoch)
+        #wandb.log({"Layer " + str(n) + " top1": top1.avg}, step=epoch)
     return top1.avg
+
+from torch.nn.parallel import DataParallel
+from torch.nn.parallel.scatter_gather import scatter_kwargs,scatter
+class DataParallelSpecial(DataParallel):
+    def __init__(self, module, device_ids=None, output_device=None, dim=0):
+        super(DataParallelSpecial,self).__init__(module, device_ids=None, output_device=None, dim=0)
+        print('Initialized with GPUs:')
+        print(self.device_ids)
+
+    def forward(self, *inputs, init=False, **kwargs):
+        if init:
+            if self.device_ids:
+                # -------- Here, we split the input tensor across GPUs
+                inputs_ = inputs
+                if not isinstance(inputs_, tuple):
+                    inputs_ = (inputs_,)
+
+                representation, _ = scatter_kwargs(inputs_, None, self.device_ids, 0)
+                self.replicas = self.replicate(self.module, self.device_ids[:len(representation)])
+                # ----
+            else:
+                representation = inputs
+            return None , representation
+
+        if not self.device_ids:
+            return self.module(*inputs, **kwargs)
+        # inputs, module_kwargs = scatter_kwargs(inputs, module_kwargs, device_ids, dim)
+        if len(self.device_ids) == 1:
+            import ipdb; ipdb.set_trace()
+            return self.module(*inputs[0][0], **kwargs)
+
+        kwargs = scatter(kwargs, self.device_ids) if kwargs else []
+         #   if len(inputs) < len(kwargs):
+          #      inputs.extend([() for _ in range(len(kwargs) - len(inputs))])
+           # elif len(kwargs) < len(inputs):
+            #    kwargs.extend([{} for _ in range(len(inputs) - len(kwargs))])
+        kwargs = tuple(kwargs)
+        outputs = self.parallel_apply(self.replicas, *inputs, kwargs)
+
+        out1 = []
+        out2 = []
+        for i, tensor in enumerate(outputs):
+            with torch.cuda.device(tensor[0].get_device()):
+                # out_1[i] = torch.autograd.Variable(tensors[i])
+                out1.append(outputs[i][0])
+                out2.append(outputs[i][1])
+        outputs = self.gather(out1, self.output_device)
+        representation = out2
+        return outputs, representation
+
+
