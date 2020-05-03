@@ -202,16 +202,24 @@ def main():
             bn=args.bn, aux_bn=args.aux_bn)
     elif args.model == 'resnet18':
         model = resnet18(n_conv=args.n_conv, mlp=args.n_mlp,
-                                       block_size=args.block_size)
+                                       block_size=args.block_size,
+                                       pooling=args.pooling,
+                                       loss_sup=args.loss_sup)
     elif args.model == 'resnet34':
         model = resnet34(n_conv=args.n_conv, mlp=args.n_mlp,
-                                       block_size=args.block_size)
+                                       block_size=args.block_size,
+                                       pooling=args.pooling,
+                                       loss_sup=args.loss_sup)
     elif args.model == 'resnet50':
         model = resnet50(n_conv=args.n_conv, mlp=args.n_mlp,
-                                       block_size=args.block_size)
+                                       block_size=args.block_size,
+                                       pooling=args.pooling,
+                                       loss_sup=args.loss_sup)
     elif args.model == 'resnet101':
         model = resnet101(n_conv=args.n_conv, mlp=args.n_mlp,
-                                       block_size=args.block_size)
+                                       block_size=args.block_size,
+                                       pooling=args.pooling,
+                                       loss_sup=args.loss_sup)
     elif args.model == 'resnet152':
         model = resnet152(n_conv=args.n_conv, mlp=args.n_mlp,
                                        block_size=args.block_size,
