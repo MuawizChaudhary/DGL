@@ -35,8 +35,9 @@ def loss_calc(outputs, y, y_onehot, module, loss_sup, beta, no_similarity_std):
     if loss_sup == 'pred':
         loss_sup = F.cross_entropy(y_hat_local,  y)
     elif loss_sup == 'predsim':
-        if not isinstance(module, nn.Linear):# and not torch.equal(Rh,y_hat_local):
-            Rh, y_hat_local = outputs 
+        if not isinstance(module, nn.Linear) and not torch.equal(Rh,y_hat_local):
+            #Rh, y_hat_local = outputs 
+            Rh = similarity_matrix(Rh, no_similarity_std)
             Ry = similarity_matrix(y_onehot, no_similarity_std).detach()
             loss_pred = (1-beta) * F.cross_entropy(y_hat_local,  y)
             loss_sim = beta * F.mse_loss(Rh, Ry)
