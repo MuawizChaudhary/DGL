@@ -228,7 +228,7 @@ class VGGn(nn.Module):
                  feat_mult=1, dropout=0.0, nonlin="relu", no_similarity_std=False,
                  loss_sup="predsim", dim_in_decoder=2048,
                  num_layers=0, num_hidden=1024,
-                 aux_type="nokland", n_mlp=0,
+                 aux_type="nokland", n_mlp=0, n_conv=0, 
                  pooling="avg", bn=True, aux_bn=False):
         super(VGGn, self).__init__()
         self.cfg = cfg[vggname]
@@ -242,6 +242,7 @@ class VGGn(nn.Module):
         self.dim_in_decoder = dim_in_decoder
         self.aux_type = aux_type
         self.n_mlp = n_mlp
+        self.n_conv = n_conv
         self.pooling = pooling
         self.bn = bn
         self.aux_bn = aux_bn
@@ -298,6 +299,7 @@ class VGGn(nn.Module):
                     auxillery_layers += [auxillary_conv_classifier(x, input_dim // scale_cum,
                                 cnn=False, num_classes=self.num_classes,
                                 n_mlp=self.n_mlp,
+                                n_conv=self.n_conv, 
                                 loss_sup=self.loss_sup,
                                 dim_in_decoder_arg=self.dim_in_decoder,
                                 pooling=self.pooling, bn=self.aux_bn, 
@@ -314,6 +316,7 @@ class VGGn(nn.Module):
                     auxillery_layers += [auxillary_conv_classifier(x, input_dim // scale_cum,
                                 cnn=False, num_classes=self.num_classes,
                                 n_mlp=self.n_mlp,
+                                n_conv=self.n_conv, 
                                 loss_sup=self.loss_sup,
                                 dim_in_decoder_arg = self.dim_in_decoder,
                                 pooling=self.pooling, bn=self.aux_bn,
@@ -327,7 +330,7 @@ class VGGn(nn.Module):
 
 class auxillary_conv_classifier(nn.Module):
     def __init__(self, input_features=256, in_size=32, cnn=False,
-                 num_classes=10, n_mlp=0, loss_sup="pred", 
+                 num_classes=10, n_mlp=0, n_conv=0, loss_sup="pred", 
                  dim_in_decoder_arg=2048, pooling="avg",
                  bn=False, dropout=0.0):
         super(auxillary_conv_classifier, self).__init__()
@@ -364,9 +367,13 @@ class auxillary_conv_classifier(nn.Module):
                 self.pool = nn.Identity()
                 self.bn = nn.Identity()
 
+
+
         if pooling == "adaptiveavg":
             self.dim_in_decoder = feature_size*4
             self.pool = nn.AdaptiveAvgPool2d((2, 2))
+
+
 
         if not bn:
             self.bn = nn.Identity()
