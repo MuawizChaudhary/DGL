@@ -36,7 +36,8 @@ def loss_calc(outputs, y, y_onehot, module, loss_sup, beta, no_similarity_std):
         loss_sup = F.cross_entropy(y_hat_local,  y)
     elif loss_sup == 'predsim':
         if not isinstance(module, nn.Linear):# and not torch.equal(Rh,y_hat_local):
-            Rh, y_hat_local = outputs 
+            #Rh, y_hat_local = outputs 
+            Rh = similarity_matrix(Rh, no_similarity_std)
             Ry = similarity_matrix(y_onehot, no_similarity_std).detach()
             loss_pred = (1-beta) * F.cross_entropy(y_hat_local,  y)
             loss_sim = beta * F.mse_loss(Rh, Ry)
@@ -102,7 +103,11 @@ def test(epoch, model, test_loader, cuda=True,num_classes=10):
         for n in range(len(model.main_cnn.blocks)):
             output, h = model(h, n=n)
 
-        output = h
+        if isinstance(output, tuple):
+            output = output[1]
+        else:
+            output = h
+
         pred = output.max(1)[1]  # get the index of the max log-probability
         correct += pred.eq(target_).cpu().sum()
 
@@ -131,8 +136,7 @@ def validate(val_loader, model, epoch, n, loss_sup, iscuda):
                 # measure accuracy and record loss
                 # measure elapsed time
             output, representation = model(representation, n=n)
-            #if loss_sup == "predsim":
-            #output = output[1]
+            
             if isinstance(output, tuple):
                 output = output[1]
             if isinstance(model.main_cnn.blocks[n], nn.Linear):

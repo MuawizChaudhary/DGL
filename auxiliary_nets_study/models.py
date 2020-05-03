@@ -405,7 +405,6 @@ class auxillary_conv_classifier(nn.Module):
         loss_sim = None
         if self.loss_sup == "predsim":
             loss_sim = self.sim_loss(x)
-            loss_sim = similarity_matrix(loss_sim, False)
 
         if self.pooling == 'adapativeavg':
             x = F.adaptive_avg_pool2d(x, (math.ceil(self.in_size / 4), math.ceil(self.in_size / 4)))
@@ -463,7 +462,6 @@ class auxillary_linear_classifier(nn.Module):
 
         if self.loss_sup == "predsim":
             loss_sim = self.sim_loss(x)
-            loss_sim = similarity_matrix(loss_sim, False)
 
         out = x.view(x.size(0), -1)
         out = self.preclassifier(out)
