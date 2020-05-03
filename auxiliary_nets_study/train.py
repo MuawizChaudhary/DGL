@@ -214,7 +214,9 @@ def main():
                                        block_size=args.block_size)
     elif args.model == 'resnet152':
         model = resnet152(n_conv=args.n_conv, mlp=args.n_mlp,
-                                       block_size=args.block_size)
+                                       block_size=args.block_size,
+                                       pooling=args.pooling,
+                                       loss_sup=args.loss_sup)
     else:
         print('No valid model defined')
 
