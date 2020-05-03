@@ -343,7 +343,21 @@ class auxillary_conv_classifier(nn.Module):
         self.dim_in_decoder = dim_in_decoder_arg
         self.pooling = pooling
         self.pool = nn.Identity()
+        self.blocks = []
         
+        for n in range(n_conv):
+            if bn:
+                bn_temp = nn.BatchNorm2d(feature_size)
+            else:
+                bn_temp = nn.Identity()
+
+            relu_temp = nn.ReLU(True)
+
+            conv = nn.Conv2d(feature_size, feature_size,
+                                 kernel_size=1, stride=1, padding=0, bias=False)
+
+            self.blocks.append(nn.Sequential(conv, bn_temp, relu_temp))
+        self.blocks = nn.ModuleList(self.blocks)
 
         if (loss_sup == 'pred' or loss_sup == 'predsim') and pooling == "avg":
             # Resolve average-pooling kernel size in order for flattened dim to match args.dim_in_decoder
@@ -372,8 +386,6 @@ class auxillary_conv_classifier(nn.Module):
         if pooling == "adaptiveavg":
             self.dim_in_decoder = feature_size*4
             self.pool = nn.AdaptiveAvgPool2d((2, 2))
-
-
 
         if not bn:
             self.bn = nn.Identity()
@@ -415,7 +427,8 @@ class auxillary_conv_classifier(nn.Module):
 
         if self.pooling == 'adapativeavg':
             x = F.adaptive_avg_pool2d(x, (math.ceil(self.in_size / 4), math.ceil(self.in_size / 4)))
-
+        for block in self.blocks:
+            x = block(x)
         out = self.pool(x)
         #out = self.bn(out)
         out = out.view(out.size(0), -1)
