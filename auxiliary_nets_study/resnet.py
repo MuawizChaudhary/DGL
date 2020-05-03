@@ -153,6 +153,7 @@ class ResNet(nn.Module):
                 auxillary_conv_classifier(in_size=in_size,
                                       input_features=planes,
                                       n_mlp=kwargs['mlp'],
+                                      n_conv=kwargs['n_conv'],
                                       bn=True,
                                       pooling=kwargs['pooling'],
                                       loss_sup=kwargs['loss_sup'],
