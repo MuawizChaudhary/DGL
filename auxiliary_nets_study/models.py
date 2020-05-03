@@ -402,7 +402,7 @@ class auxillary_conv_classifier(nn.Module):
                     bn_temp = nn.BatchNorm1d(mlp_feat)
                 else:
                     bn_temp = nn.Identity()
-                dropout_temp = torch.nn.Dropout2d(p=dropout, inplace=False)
+                dropout_temp = torch.nn.Dropout(p=dropout, inplace=False)
                 layers += [nn.Linear(mlp_feat, mlp_feat),
                            bn_temp, nn.ReLU(True), dropout_temp]
             self.mlp = True
