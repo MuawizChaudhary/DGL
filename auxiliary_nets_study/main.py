@@ -367,7 +367,7 @@ def train(train_loader, model, criterion, optimizers, epoch, args):
         if args.gpu is not None:
             images = images.cuda(args.gpu, non_blocking=True)
         target = target.cuda(args.gpu, non_blocking=True)
-        targets_onehot = to_one_hot(target)
+        targets_onehot = to_one_hot(target, n_dims=1000)
         targets_onehot = targets_onehot.cuda(args.gpu, non_blocking=True)
         rep = images
         for n in range(0, ncnn):
