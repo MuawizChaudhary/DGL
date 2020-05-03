@@ -430,7 +430,7 @@ class auxillary_conv_classifier(nn.Module):
         for block in self.blocks:
             x = block(x)
         out = self.pool(x)
-        #out = self.bn(out)
+        out = self.bn(out)
         out = out.view(out.size(0), -1)
         out = self.preclassifier(out)
         out = self.classifier(out)
