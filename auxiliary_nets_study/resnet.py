@@ -5,9 +5,9 @@ import torch.nn.functional as F
 import math
 from functools import partial
 
-__all__ = ['resnet152']
+__all__ = ['resnet152', 'resnet18', 'resnet34', 'resnet50',  'resnet101']
 
-#from models import auxillary_classifier2
+from models import auxillary_conv_classifier
 
 
 class View(nn.Module):
@@ -114,14 +114,15 @@ class BasicBlock(nn.Module):
         return out
 
 class ResNet(nn.Module):
-    def __init__(self, block, layers, num_classes=10, split_points=2, **kwargs):
+
+    def __init__(self, block, layers, num_classes=1000, split_points=2, **kwargs):
         super(ResNet, self).__init__()
         self.inplanes = 64
         self.avg_size = int(56 / 2)
         self.in_size = 56
 
-        self.blocks = nn.ModuleList([])
-        self.base_blocks = nn.ModuleList([])
+        blocks = nn.ModuleList([])
+        base_blocks = nn.ModuleList([])
         self.auxillary_nets = nn.ModuleList([])
         self.auxillary_size_tracker = []
 
@@ -130,29 +131,32 @@ class ResNet(nn.Module):
                  nn.BatchNorm2d(64), nn.ReLU(inplace=True),
                  nn.MaxPool2d(kernel_size=3, stride=2, padding=1)]
 
-        self.base_blocks.append(nn.Sequential(*layer))
+        base_blocks.append(nn.Sequential(*layer))
         self.auxillary_size_tracker.append((self.in_size,self.inplanes))
 
-        self._make_layer(block, 64, layers[0], **kwargs)
-        self._make_layer(block, 128, layers[1], stride=2, **kwargs)
-        self._make_layer(block, 256, layers[2], stride=2, **kwargs)
-        self._make_layer(block, 512, layers[3], stride=2, **kwargs)
+        base_blocks = self._make_layer(block, base_blocks, 64, layers[0], **kwargs)
+        base_blocks = self._make_layer(block, base_blocks, 128, layers[1], stride=2, **kwargs)
+        base_blocks = self._make_layer(block, base_blocks, 256, layers[2], stride=2, **kwargs)
+        base_blocks = self._make_layer(block, base_blocks, 512, layers[3], stride=2, **kwargs)
 
-        len_layers = len(self.base_blocks)
-        split_depth = math.ceil(len(self.base_blocks) / split_points)
+        len_layers = len(base_blocks)
+        split_depth = math.ceil(len(base_blocks) / split_points)
 
         for splits_id in range(split_points):
             left_idx = splits_id * split_depth
             right_idx = (splits_id + 1) * split_depth
             if right_idx > len_layers:
                 right_idx = len_layers
-            self.blocks.append(nn.Sequential(*self.base_blocks[left_idx:right_idx]))
+            blocks.append(nn.Sequential(*base_blocks[left_idx:right_idx]))
             in_size, planes = self.auxillary_size_tracker[right_idx-1]
             self.auxillary_nets.append(
-                auxillary_classifier2(in_size=in_size,
-                                      nlin=kwargs['nlin'], 
-                                      input_features=planes, mlp_layers=kwargs['mlp'],
-                                      num_classes=num_classes)
+                auxillary_conv_classifier(in_size=in_size,
+                                      input_features=planes,
+                                      n_mlp=kwargs['mlp'],
+                                      bn=True,
+                                      pooling=kwargs['pooling'],
+                                      loss_sup=kwargs['loss_sup'],
+                                      num_classes=1000)
             )
 
 
@@ -162,7 +166,7 @@ class ResNet(nn.Module):
             nn.Linear(512 * block.expansion, num_classes)
         )
 
-        self.main_cnn = rep(self.blocks)
+        self.main_cnn = rep(blocks)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -171,7 +175,7 @@ class ResNet(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def _make_layer(self, block, planes, blocks, stride=1, **kwargs):
+    def _make_layer(self, block, base_blocks, planes, blocks, stride=1, **kwargs):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
@@ -182,12 +186,14 @@ class ResNet(nn.Module):
             self.in_size =  int(self.in_size/2)
 
 
-        self.base_blocks.append(block(self.inplanes, planes, stride, downsample))
+        base_blocks.append(block(self.inplanes, planes, stride, downsample))
         self.auxillary_size_tracker.append((self.in_size,planes*block.expansion))
         self.inplanes = planes * block.expansion
         for _ in range(1, blocks):
-            self.base_blocks.append(block(self.inplanes, planes))
+            base_blocks.append(block(self.inplanes, planes))
             self.auxillary_size_tracker.append((self.in_size,planes*block.expansion))
+        return base_blocks
+
 
     def forward(self, representation, n, upto=False):
         representation = self.main_cnn.forward(representation, n, upto=upto)
@@ -203,7 +209,7 @@ def resnet34(**kwargs):
     return model
 
 def resnet50(**kwargs):
-    model = ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
+    model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
     return model
 
 def resnet101(**kwargs):
