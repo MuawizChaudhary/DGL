@@ -283,7 +283,7 @@ def main():
 
         if args.lr_schd == 'nokland' or args.lr_schd == 'step':
             for n in range(n_cnn):
-                layer_lr[n] = lr_scheduler(args.lr, epoch-1, args)
+                layer_lr[n] = lr_scheduler(layer_lr[n], epoch-1, args)
                 optimizer = layer_optim[n]
                 if optimizer is not None: 
                     for param_group in optimizer.param_groups:

@@ -408,6 +408,7 @@ class auxillary_conv_classifier(nn.Module):
             self.mlp = True
             self.preclassifier = nn.Sequential(*layers)
             self.classifier = nn.Linear(mlp_feat, num_classes)
+            self.classifier.weight.data.zero_()
             if loss_sup == 'predsim':
                 self.sim_loss = nn.Conv2d(feature_size, feature_size, 3, stride=1, padding=1, bias=False)
 
