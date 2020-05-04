@@ -381,6 +381,7 @@ class auxillary_conv_classifier(nn.Module):
                 self.pool = nn.Identity()
                 self.bn = nn.Identity()
 
+        dropout=0.0
 
 
         if pooling == "adaptiveavg":
@@ -431,7 +432,8 @@ class auxillary_conv_classifier(nn.Module):
         for block in self.blocks:
             x = block(x)
         out = self.pool(x)
-        out = self.bn(out)
+        if not self.mlp:
+            out = self.bn(out)
         out = out.view(out.size(0), -1)
         out = self.preclassifier(out)
         out = self.classifier(out)
@@ -445,6 +447,13 @@ class auxillary_linear_classifier(nn.Module):
         super(auxillary_linear_classifier, self).__init__()
         feature_size = input_features
         self.loss_sup = loss_sup
+        dropout=0.0
+
+        if not bn:
+            self.bn = nn.Identity()
+        else:
+            self.bn = nn.BatchNorm2d(feature_size)
+
 
         if n_mlp > 0:
             self.mlp = True
@@ -483,6 +492,8 @@ class auxillary_linear_classifier(nn.Module):
 
         if self.loss_sup == "predsim":
             loss_sim = self.sim_loss(x)
+        if not self.mlp:
+            x = self.bn(x)
 
         out = x.view(x.size(0), -1)
         out = self.preclassifier(out)
