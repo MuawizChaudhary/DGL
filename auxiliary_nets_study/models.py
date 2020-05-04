@@ -452,7 +452,7 @@ class auxillary_linear_classifier(nn.Module):
         if not bn:
             self.bn = nn.Identity()
         else:
-            self.bn = nn.BatchNorm2d(feature_size)
+            self.bn = nn.BatchNorm1d(feature_size)
 
 
         if n_mlp > 0:
