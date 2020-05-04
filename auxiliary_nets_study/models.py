@@ -381,7 +381,7 @@ class auxillary_conv_classifier(nn.Module):
                 self.pool = nn.Identity()
                 self.bn = nn.Identity()
 
-        dropout=0.0
+        #dropout=0.0
 
 
         if pooling == "adaptiveavg":
@@ -447,7 +447,7 @@ class auxillary_linear_classifier(nn.Module):
         super(auxillary_linear_classifier, self).__init__()
         feature_size = input_features
         self.loss_sup = loss_sup
-        dropout=0.0
+        #dropout=0.0
 
         if not bn:
             self.bn = nn.Identity()
