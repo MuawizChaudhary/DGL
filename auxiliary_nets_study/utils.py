@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 import wandb
+from models import Linear_Layer_Local_Loss
 
 def to_one_hot(y, n_dims=None):
     ''' Take integer tensor y with n dims and convert it to 1-hot representation with n+1 dims. '''
@@ -26,7 +27,7 @@ def similarity_matrix(x, no_similarity_std):
     return R
 
 def loss_calc(outputs, y, y_onehot, module, loss_sup, beta, no_similarity_std):
-    if not isinstance(module, nn.Linear) and type(outputs) == tuple:
+    if not isinstance(module, Linear_Layer_Local_Loss) and type(outputs) == tuple:
         Rh, y_hat_local = outputs
     else:
         Rh = outputs
@@ -35,7 +36,7 @@ def loss_calc(outputs, y, y_onehot, module, loss_sup, beta, no_similarity_std):
     if loss_sup == 'pred':
         loss_sup = F.cross_entropy(y_hat_local,  y)
     elif loss_sup == 'predsim':
-        if not isinstance(module, nn.Linear):# and not torch.equal(Rh,y_hat_local):
+        if not isinstance(module, Linear_Layer_Local_Loss):# and not torch.equal(Rh,y_hat_local):
             #Rh, y_hat_local = outputs 
             Rh = similarity_matrix(Rh, no_similarity_std)
             Ry = similarity_matrix(y_onehot, no_similarity_std).detach()

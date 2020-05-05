@@ -2,7 +2,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from utils import similarity_matrix
+
+class View(nn.Module):
+    def __init__(self):
+        super(View, self).__init__()
+
+    def forward(self, x):
+        return x.view(x.shape[0], -1)
 
 
 class rep(nn.Module):
@@ -15,24 +21,16 @@ class rep(nn.Module):
         # if upto = False we forward just through layer n
         if upto:
             for i in range(n + 1):
-                if isinstance(self.blocks[i], nn.MaxPool2d) or isinstance(self.blocks[i], nn.Linear):
+                if isinstance(self.blocks[i], nn.MaxPool2d):
                     out = self.blocks[i](x)
                     return out, out
-                elif isinstance(self.blocks[i], LocalLossBlockLinear):
-                    x = x.view(x.size(0), -1)
-                    x, x_return = self.forward(x, i, upto=False)
-                    return x, x_return
                 else:
                     x, x_return = self.forward(x, i, upto=False)
                     return x, x_return
 
-        if isinstance(self.blocks[n], nn.MaxPool2d) or isinstance(self.blocks[n], nn.Linear):
+        if isinstance(self.blocks[n], nn.MaxPool2d):
             out = self.blocks[n](x)
             return out, out
-        elif isinstance(self.blocks[n], LocalLossBlockLinear):
-            x = x.view(x.size(0), -1)
-            out, out_return = self.blocks[n](x)
-            return out, out_return
         else:
             out, out_return = self.blocks[n](x)
             return out, out_return
@@ -71,7 +69,7 @@ class LocalLossBlockLinear(nn.Module):
         elif nonlin == 'leakyrelu':
             nonlin = nn.LeakyReLU(negative_slope=0.01, inplace=True)
 
-        self.MLP = nn.Sequential(encoder, batchnorm, nonlin)
+        self.MLP = nn.Sequential(View(), encoder, batchnorm, nonlin)
 
         self.dropout = torch.nn.Dropout(p=self.dropout_p, inplace=False)
 
@@ -181,14 +179,29 @@ class Net(nn.Module):
                             no_similarity_std, loss_sup, dim_in_decoder)
             self.auxillery_layers.extend([aux])
 
-        layer_out = nn.Linear(int(num_hidden // (reduce_factor ** (num_layers - 1))), num_classes)
-        layer_out.weight.data.zero_()
+        layer_out = Linear_Layer_Local_Loss(int(num_hidden // (reduce_factor ** (num_layers - 1))), num_classes)
+        #layer_out.weight.data.zero_()
+
 
         self.layers.extend([layer_out])
         self.auxillery_layers.extend([nn.Identity()])
 
     def parameters(self):
         return self.layer_out.parameters()
+
+
+class Linear_Layer_Local_Loss(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(Linear_Layer_Local_Loss, self).__init__()
+        self.linear = nn.Linear(input_size, output_size)
+        self.linear.weight.data.zero_()
+
+    def forward(self, x):
+        h = self.linear(x)
+        return h, h
+
+
+
 
 
 cfg = {
