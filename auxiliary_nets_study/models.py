@@ -73,14 +73,11 @@ class LocalLossBlockLinear(nn.Module):
 
         self.MLP = nn.Sequential(encoder, batchnorm, nonlin)
 
-        if self.dropout_p > 0:
-            self.dropout = torch.nn.Dropout(p=self.dropout_p, inplace=False)
+        self.dropout = torch.nn.Dropout(p=self.dropout_p, inplace=False)
 
     def forward(self, x):
         h = self.MLP(x)
-        h_return = h
-        if self.dropout_p > 0:
-            h_return = self.dropout(h_return)
+        h_return = self.dropout(h)
         return h, h_return
 
 
@@ -128,14 +125,11 @@ class LocalLossBlockConv(nn.Module):
 
         self.MLP = nn.Sequential(encoder, batchnorm, nonlin)
 
-        if self.dropout_p > 0:
-            self.dropout = torch.nn.Dropout2d(p=self.dropout_p, inplace=False)
+        self.dropout = torch.nn.Dropout2d(p=self.dropout_p, inplace=False)
 
     def forward(self, x):
         h = self.MLP(x)
-        h_return = h
-        if self.dropout_p > 0:
-            h_return = self.dropout(h_return)
+        h_return = self.dropout(h)
         return h, h_return
 
 
@@ -409,7 +403,7 @@ class auxillary_conv_classifier(nn.Module):
             self.mlp = True
             self.preclassifier = nn.Sequential(*layers)
             self.classifier = nn.Linear(mlp_feat, num_classes)
-            #self.classifier.weight.data.zero_()
+            self.classifier.weight.data.zero_()
             if loss_sup == 'predsim':
                 self.sim_loss = nn.Conv2d(feature_size, feature_size, 3, stride=1, padding=1, bias=False)
 
@@ -417,7 +411,7 @@ class auxillary_conv_classifier(nn.Module):
             self.mlp = False
             self.preclassifier = nn.Identity()
             self.classifier = nn.Linear(self.dim_in_decoder, num_classes)
-            #self.classifier.weight.data.zero_()
+            self.classifier.weight.data.zero_()
             if loss_sup == 'predsim':
                 self.sim_loss = nn.Conv2d(feature_size, feature_size, 3, stride=1, padding=1, bias=False)
     
@@ -432,8 +426,8 @@ class auxillary_conv_classifier(nn.Module):
         for block in self.blocks:
             x = block(x)
         out = self.pool(x)
-        if not self.mlp:
-            out = self.bn(out)
+        #if not self.mlp:
+        #    out = self.bn(out)
         out = out.view(out.size(0), -1)
         out = self.preclassifier(out)
         out = self.classifier(out)
@@ -472,7 +466,7 @@ class auxillary_linear_classifier(nn.Module):
 
             self.preclassifier = nn.Sequential(*layers)
             self.classifier = nn.Linear(mlp_feat, num_classes)
-            #self.classifier.weight.data.zero_()
+            self.classifier.weight.data.zero_()
 
             if loss_sup == 'predsim':
                 self.sim_loss = nn.Linear(feature_size, feature_size, bias=False)
@@ -480,7 +474,7 @@ class auxillary_linear_classifier(nn.Module):
             self.mlp = False
             self.preclassifier = nn.Identity()
             self.classifier = nn.Linear(feature_size, num_classes)
-            #self.classifier.weight.data.zero_()
+            self.classifier.weight.data.zero_()
 
             if loss_sup == 'predsim':
                 self.sim_loss = nn.Linear(feature_size, feature_size, bias=False)
@@ -492,8 +486,8 @@ class auxillary_linear_classifier(nn.Module):
 
         if self.loss_sup == "predsim":
             loss_sim = self.sim_loss(x)
-        if not self.mlp:
-            x = self.bn(x)
+        #if not self.mlp:
+        #    x = self.bn(x)
 
         out = x.view(x.size(0), -1)
         out = self.preclassifier(out)
