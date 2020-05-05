@@ -393,13 +393,12 @@ class auxillary_conv_classifier(nn.Module):
 
         if pooling == "adaptiveavg":
             self.dim_in_decoder = feature_size*4
+            self.pre_conv_pool = nn.AdaptiveAvgPool2d((math.ceil(self.in_size / 4), math.ceil(self.in_size / 4)))
             self.pool = nn.AdaptiveAvgPool2d((2, 2))
-
-        if not bn:
-            self.bn = nn.Identity()
         else:
-            self.bn = nn.BatchNorm2d(feature_size)
+            self.pre_conv_pool = nn.Identity()
 
+        
         if n_mlp > 0:
             mlp_feat = self.dim_in_decoder
 
@@ -427,15 +426,21 @@ class auxillary_conv_classifier(nn.Module):
             self.classifier.weight.data.zero_()
             if loss_sup == 'predsim':
                 self.sim_loss = nn.Conv2d(feature_size, feature_size, 3, stride=1, padding=1, bias=False)
-    
+
+        if not bn and not self.mlp:
+            self.bn = nn.Identity()
+        else:
+            self.bn = nn.BatchNorm2d(feature_size)
+
     def forward(self, x):
         out = None
         loss_sim = None
         if self.loss_sup == "predsim":
             loss_sim = self.sim_loss(x)
 
-        if self.pooling == 'adapativeavg':
-            x = F.adaptive_avg_pool2d(x, (math.ceil(self.in_size / 4), math.ceil(self.in_size / 4)))
+        #if self.pooling == 'adapativeavg':
+        #    x = F.adaptive_avg_pool2d(x, (math.ceil(self.in_size / 4), math.ceil(self.in_size / 4)))
+        x = self.pre_conv_pool(x)
         for block in self.blocks:
             x = block(x)
         out = self.pool(x)
@@ -454,13 +459,6 @@ class auxillary_linear_classifier(nn.Module):
         super(auxillary_linear_classifier, self).__init__()
         feature_size = input_features
         self.loss_sup = loss_sup
-        #dropout=0.0
-
-        if not bn:
-            self.bn = nn.Identity()
-        else:
-            self.bn = nn.BatchNorm1d(feature_size)
-
 
         if n_mlp > 0:
             self.mlp = True
@@ -492,6 +490,10 @@ class auxillary_linear_classifier(nn.Module):
             if loss_sup == 'predsim':
                 self.sim_loss = nn.Linear(feature_size, feature_size, bias=False)
 
+        if not bn or not self.mlp:
+            self.bn = nn.Identity()
+        else:
+            self.bn = nn.BatchNorm1d(feature_size)
 
     def forward(self, x):
         out = None
@@ -499,8 +501,7 @@ class auxillary_linear_classifier(nn.Module):
 
         if self.loss_sup == "predsim":
             loss_sim = self.sim_loss(x)
-        #if not self.mlp:
-        #    x = self.bn(x)
+        #x = self.bn(x)
 
         out = x.view(x.size(0), -1)
         out = self.preclassifier(out)
