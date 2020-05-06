@@ -199,7 +199,7 @@ class Final_Layer_Local_Loss(nn.Module):
         super(Final_Layer_Local_Loss, self).__init__()
 
     def forward(self, x):
-        return (None, x)
+        return x, None
 
 
 
@@ -287,8 +287,8 @@ class VGGn(nn.Module):
 
     def forward(self, representation, n, upto=False):
         rep, rep_return = self.main_cnn.forward(representation, n, upto=upto)
-        outputs = self.auxillary_nets[n](rep)
-        return outputs, rep_return
+        pred, sim = self.auxillary_nets[n](rep)
+        return pred, sim, rep_return
 
     def _make_layers(self, cfg, input_ch, input_dim, feat_mult):
         layers = []
@@ -299,7 +299,7 @@ class VGGn(nn.Module):
         for x in cfg:
             if x == 'M':
                 layers += [Maxpool_Layer_Local_Loss()]
-                auxillery_layers += [nn.Identity()]
+                auxillery_layers += [Final_Layer_Local_Loss()]
                 max_pool = True
                 scale_cum *= 2
             else:
@@ -428,7 +428,7 @@ class auxillary_conv_classifier(nn.Module):
                     bn_temp = nn.Identity()
                 dropout_temp = torch.nn.Dropout(p=dropout, inplace=False)
                 layers += [nn.Linear(mlp_feat, mlp_feat),
-                           bn_temp, nn.ReLU(True), dropout_temp]
+                           bn_temp, nn.ReLU(True), dropout_temp]#True
             self.mlp = True
             self.preclassifier = nn.Sequential(*layers)
             self.classifier = nn.Linear(mlp_feat, num_classes)
@@ -466,7 +466,7 @@ class auxillary_conv_classifier(nn.Module):
         out = out.view(out.size(0), -1)
         out = self.preclassifier(out)
         out = self.classifier(out)
-        return (loss_sim, out)
+        return out, loss_sim
 
 
 class auxillary_linear_classifier(nn.Module):
@@ -490,7 +490,7 @@ class auxillary_linear_classifier(nn.Module):
                     bn_temp = nn.Identity()
                 dropout_temp = torch.nn.Dropout(p=dropout, inplace=False)
                 layers += [nn.Linear(in_feat, mlp_feat),
-                           bn_temp, nn.ReLU(True), dropout_temp]
+                           bn_temp, nn.ReLU(True), dropout_temp]#True
 
             self.preclassifier = nn.Sequential(*layers)
             self.classifier = nn.Linear(mlp_feat, num_classes)
@@ -520,7 +520,7 @@ class auxillary_linear_classifier(nn.Module):
             loss_sim = self.sim_loss(x)
         #x = self.bn(x)
 
-        out = x.view(x.size(0), -1)
-        out = self.preclassifier(out)
+        #out = x.view(x.size(0), -1)
+        out = self.preclassifier(x)
         out = self.classifier(out)
-        return (loss_sim, out)
+        return out, loss_sim

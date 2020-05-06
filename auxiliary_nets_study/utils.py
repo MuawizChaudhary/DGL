@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 import wandb
-from models import Linear_Layer_Local_Loss
 
 def to_one_hot(y, n_dims=None):
     ''' Take integer tensor y with n dims and convert it to 1-hot representation with n+1 dims. '''
@@ -26,8 +25,8 @@ def similarity_matrix(x, no_similarity_std):
     R = xn.matmul(xn.transpose(1,0)).clamp(-1,1)
     return R
 
-def loss_calc(outputs, y, y_onehot, loss_sup, beta, no_similarity_std):
-    Rh, y_hat_local = outputs
+def loss_calc(y_hat_local, Rh, y, y_onehot, loss_sup, beta, no_similarity_std):
+    #Rh, y_hat_local = outputs
     if loss_sup == 'pred':
         loss_sup = F.cross_entropy(y_hat_local,  y)
     elif loss_sup == 'predsim':
@@ -93,12 +92,7 @@ def test(epoch, model, test_loader, cuda=True,num_classes=10):
         h, y,  = data, target
 
         for n in range(len(model.main_cnn.blocks)):
-            output, h = model(h, n=n)
-
-        if isinstance(output, tuple):
-            output = output[1]
-        else:
-            output = h
+            output, sim, h = model(h, n=n)
 
         pred = output.max(1)[1]  # get the index of the max log-probability
         correct += pred.eq(target_).cpu().sum()
@@ -123,20 +117,12 @@ def validate(val_loader, model, epoch, n, loss_sup, iscuda):
 
             representation = input
             for i in range(n):
-                output, representation = model(representation, n=i)
-                #representation = representation.detach()
+                output, _, representation = model(representation, n=i)
                 # measure accuracy and record loss
                 # measure elapsed time
-            output, representation = model(representation, n=n)
-            
-            if isinstance(output, tuple):
-                output = output[1]
-            if isinstance(model.main_cnn.blocks[n], nn.Linear):
-               output = representation
-
+            output, _, representation = model(representation, n=n)
             # measure accuracy and record loss
             loss = F.cross_entropy(output, target)
-
             prec1 = accuracy(output.data, target)
             losses.update(float(loss.item()), float(input.size(0)))
             top1.update(float(prec1[0]), float(input.size(0)))

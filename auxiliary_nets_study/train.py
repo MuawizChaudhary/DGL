@@ -186,14 +186,14 @@ def main():
     train_loader = torch.utils.data.DataLoader(
         dataset_train,
         sampler=None,
-        batch_size=args.batch_size, shuffle=True)
+        batch_size=args.batch_size, shuffle=True, num_workers=4)
     test_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10('../data/CIFAR10', train=False,
                          transform=transforms.Compose([
                              transforms.ToTensor(),
                              transforms.Normalize((0.424, 0.415, 0.384), (0.283, 0.278, 0.284))
                          ])),
-        batch_size=args.batch_size, shuffle=False)
+        batch_size=1000, shuffle=False, num_workers=4)#args.batch_size
 
 
     # Model
@@ -253,10 +253,11 @@ def main():
             if args.cuda:
                 targets = targets.cuda(non_blocking = True)
                 inputs = inputs.cuda(non_blocking = True)
+                #inputs = torch.autograd.Variable(inputs)
 
-            target_onehot = to_one_hot(targets)
+            target_onehot = to_one_hot(targets, 10)
             if args.cuda:
-                target_onehot = target_onehot.cuda()
+                target_onehot = target_onehot.cuda(non_blocking = True)
 
 
             representation = inputs
@@ -265,10 +266,10 @@ def main():
 
                 # Forward
 
-                outputs, representation = model(representation, n=n)
+                pred, sim, representation = model(representation, n=n)
 
                 if optimizer is not None:
-                    loss = loss_calc(outputs, targets, target_onehot,
+                    loss = loss_calc(pred, sim, targets, target_onehot,
                             args.loss_sup, args.beta,
                             args.no_similarity_std)
 
@@ -297,7 +298,7 @@ def main():
         # We now log the statistics
         print('epoch: ' + str(epoch) + ' , lr: ' + str(lr_scheduler(layer_lr[-1], epoch-1, args)))
             
-        test(epoch, model, test_loader)
+        #test(epoch, model, test_loader)
         for n in range(n_cnn):
             if layer_optim[n] is not None:
                 wandb.log({"Layer " + str(n) + " train loss": losses[n].avg}, step=epoch)
