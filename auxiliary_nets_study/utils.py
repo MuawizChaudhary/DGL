@@ -26,27 +26,18 @@ def similarity_matrix(x, no_similarity_std):
     R = xn.matmul(xn.transpose(1,0)).clamp(-1,1)
     return R
 
-def loss_calc(outputs, y, y_onehot, module, loss_sup, beta, no_similarity_std):
-    #if not isinstance(module, Linear_Layer_Local_Loss) and type(outputs) == tuple:
+def loss_calc(outputs, y, y_onehot, loss_sup, beta, no_similarity_std):
     Rh, y_hat_local = outputs
-    #else:
-    #    Rh = outputs
-    #    y_hat_local = outputs
-    # Calculate supervised loss
     if loss_sup == 'pred':
         loss_sup = F.cross_entropy(y_hat_local,  y)
     elif loss_sup == 'predsim':
-        if not isinstance(module, Linear_Layer_Local_Loss):# and not torch.equal(Rh,y_hat_local):
-            #Rh, y_hat_local = outputs 
+        if Rh is not None:
             Rh = similarity_matrix(Rh, no_similarity_std)
             Ry = similarity_matrix(y_onehot, no_similarity_std).detach()
             loss_pred = (1-beta) * F.cross_entropy(y_hat_local,  y)
             loss_sim = beta * F.mse_loss(Rh, Ry)
             loss_sup = loss_pred + loss_sim
         else:
-            y_hat_local = outputs
-            if type(y_hat_local) == tuple:
-                y_hat_local=y_hat_local[1]
             loss_sup = (1-beta) * F.cross_entropy(y_hat_local,  y)
     return loss_sup
 
@@ -133,7 +124,7 @@ def validate(val_loader, model, epoch, n, loss_sup, iscuda):
             representation = input
             for i in range(n):
                 output, representation = model(representation, n=i)
-                representation = representation.detach()
+                #representation = representation.detach()
                 # measure accuracy and record loss
                 # measure elapsed time
             output, representation = model(representation, n=n)

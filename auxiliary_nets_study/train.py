@@ -269,7 +269,7 @@ def main():
 
                 if optimizer is not None:
                     loss = loss_calc(outputs, targets, target_onehot,
-                            model.main_cnn.blocks[n], args.loss_sup, args.beta,
+                            args.loss_sup, args.beta,
                             args.no_similarity_std)
 
                     loss.backward()
