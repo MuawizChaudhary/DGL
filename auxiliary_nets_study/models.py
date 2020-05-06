@@ -21,19 +21,11 @@ class rep(nn.Module):
         # if upto = False we forward just through layer n
         if upto:
             for i in range(n + 1):
-                if isinstance(self.blocks[i], nn.MaxPool2d):
-                    out = self.blocks[i](x)
-                    return out, out
-                else:
-                    x, x_return = self.forward(x, i, upto=False)
-                    return x, x_return
+                x, x_return = self.forward(x, i, upto=False)
+            return x, x_return
 
-        if isinstance(self.blocks[n], nn.MaxPool2d):
-            out = self.blocks[n](x)
-            return out, out
-        else:
-            out, out_return = self.blocks[n](x)
-            return out, out_return
+        out, out_return = self.blocks[n](x)
+        return out, out_return
 
 
 class LocalLossBlockLinear(nn.Module):
