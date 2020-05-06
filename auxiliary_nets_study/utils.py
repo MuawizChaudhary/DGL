@@ -27,11 +27,11 @@ def similarity_matrix(x, no_similarity_std):
     return R
 
 def loss_calc(outputs, y, y_onehot, module, loss_sup, beta, no_similarity_std):
-    if not isinstance(module, Linear_Layer_Local_Loss) and type(outputs) == tuple:
-        Rh, y_hat_local = outputs
-    else:
-        Rh = outputs
-        y_hat_local = outputs
+    #if not isinstance(module, Linear_Layer_Local_Loss) and type(outputs) == tuple:
+    Rh, y_hat_local = outputs
+    #else:
+    #    Rh = outputs
+    #    y_hat_local = outputs
     # Calculate supervised loss
     if loss_sup == 'pred':
         loss_sup = F.cross_entropy(y_hat_local,  y)
