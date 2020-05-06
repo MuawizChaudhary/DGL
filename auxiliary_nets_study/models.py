@@ -49,7 +49,7 @@ class LocalLossBlockLinear(nn.Module):
     '''
 
     def __init__(self, num_in, num_out, num_classes, dropout=0.0,
-                 nonlin="relu", first_layer=False, bn=False, max_pool=True):
+                 nonlin="relu", first_layer=False, bn=False):
         super(LocalLossBlockLinear, self).__init__()
         self.num_classes = num_classes
         self.first_layer = first_layer
@@ -64,17 +64,12 @@ class LocalLossBlockLinear(nn.Module):
         else:
             batchnorm = nn.Identity()
 
-        if max_pool:
-            maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-        else:
-            maxpool = nn.Identity()
-
         if nonlin == 'relu':
             nonlin = nn.ReLU(inplace=True)
         elif nonlin == 'leakyrelu':
             nonlin = nn.LeakyReLU(negative_slope=0.01, inplace=True)
 
-        self.MLP = nn.Sequential(maxpool, View(), encoder, batchnorm, nonlin)
+        self.MLP = nn.Sequential(View(), encoder, batchnorm, nonlin)
 
         self.dropout = torch.nn.Dropout(p=self.dropout_p, inplace=False)
 
@@ -104,7 +99,7 @@ class LocalLossBlockConv(nn.Module):
 
     def __init__(self, ch_in, ch_out, kernel_size, stride, padding,
                  num_classes, dim_out, dropout=0.0, nonlin="relu",
-                 first_layer=False, bn=False, max_pool=False):
+                 first_layer=False, bn=False):
         super(LocalLossBlockConv, self).__init__()
         self.ch_in = ch_in
         self.ch_out = ch_out
@@ -121,17 +116,12 @@ class LocalLossBlockConv(nn.Module):
         else:
             batchnorm = nn.Identity()
 
-        if max_pool:
-            maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-        else:
-            maxpool = nn.Identity()
-
         if nonlin == 'relu':
             nonlin = nn.ReLU(inplace=True)
         elif nonlin == 'leakyrelu':
             nonlin = nn.LeakyReLU(negative_slope=0.01, inplace=True)
 
-        self.MLP = nn.Sequential(maxpool, encoder, batchnorm, nonlin)
+        self.MLP = nn.Sequential(encoder, batchnorm, nonlin)
 
         self.dropout = torch.nn.Dropout2d(p=self.dropout_p, inplace=False)
 
@@ -296,12 +286,10 @@ class VGGn(nn.Module):
         auxillery_layers = []
         first_layer = True
         scale_cum = 1
-        max_pool = False
         for x in cfg:
             if x == 'M':
-                #layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
-                #auxillery_layers += [nn.Identity()]
-                max_pool = True
+                layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+                auxillery_layers += [nn.Identity()]
                 scale_cum *= 2
             else:
                 x = int(x * feat_mult)
@@ -313,8 +301,7 @@ class VGGn(nn.Module):
                                                   dropout=self.dropout,
                                                   nonlin=self.nonlin,
                                                   first_layer=first_layer,
-                                                  bn=self.bn,
-                                                  max_pool=max_pool)]
+                                                  bn=self.bn)]
 
                     auxillery_layers += [auxillary_conv_classifier(x, input_dim // scale_cum,
                                 cnn=False, num_classes=self.num_classes,
@@ -331,7 +318,8 @@ class VGGn(nn.Module):
                                                   dropout=self.dropout,
                                                   nonlin=self.nonlin,
                                                   first_layer=first_layer,
-                                                  bn=self.bn, max_pool=max_pool)]
+                                                  bn=self.bn)]
+
                     auxillery_layers += [auxillary_conv_classifier(x, input_dim // scale_cum,
                                 cnn=False, num_classes=self.num_classes,
                                 n_mlp=self.n_mlp,
@@ -342,7 +330,6 @@ class VGGn(nn.Module):
                                 dropout=self.dropout)]
                 input_ch = x
                 first_layer = False
-                max_pool = False
 
         return nn.ModuleList(layers), nn.ModuleList(auxillery_layers), input_dim // scale_cum
 
