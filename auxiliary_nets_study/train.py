@@ -186,14 +186,14 @@ def main():
     train_loader = torch.utils.data.DataLoader(
         dataset_train,
         sampler=None,
-        batch_size=args.batch_size, shuffle=True, num_workers=4)
+        batch_size=args.batch_size, shuffle=True, num_workers=8)
     test_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10('../data/CIFAR10', train=False,
                          transform=transforms.Compose([
                              transforms.ToTensor(),
                              transforms.Normalize((0.424, 0.415, 0.384), (0.283, 0.278, 0.284))
                          ])),
-        batch_size=1000, shuffle=False, num_workers=4)#args.batch_size
+        batch_size=1000, shuffle=False, num_workers=8)#args.batch_size
 
 
     # Model
