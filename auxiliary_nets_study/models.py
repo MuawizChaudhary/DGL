@@ -218,6 +218,16 @@ cfg = {
 }
 
 
+class Maxpool_Layer_Local_Loss(nn.Module):
+    def __init__(self):
+        super(Maxpool_Layer_Local_Loss, self).__init__()
+        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
+
+    def forward(self, x):
+        h = self.maxpool(x)
+        return h, h
+
+
 class VGGn(nn.Module):
     '''
     VGG and VGG-like networks.
@@ -288,7 +298,7 @@ class VGGn(nn.Module):
         scale_cum = 1
         for x in cfg:
             if x == 'M':
-                layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+                layers += [Maxpool_Layer_Local_Loss()]
                 auxillery_layers += [nn.Identity()]
                 scale_cum *= 2
             else:
