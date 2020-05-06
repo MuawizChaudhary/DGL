@@ -176,7 +176,7 @@ class Net(nn.Module):
 
 
         self.layers.extend([layer_out])
-        self.auxillery_layers.extend([nn.Identity()])
+        self.auxillery_layers.extend([Final_Layer_Local_Loss()])
 
     def parameters(self):
         return self.layer_out.parameters()
@@ -193,6 +193,13 @@ class Linear_Layer_Local_Loss(nn.Module):
         return h, h
 
 
+
+class Final_Layer_Local_Loss(nn.Module):
+    def __init__(self):
+        super(Final_Layer_Local_Loss, self).__init__()
+
+    def forward(self, x):
+        return (None, x)
 
 
 
@@ -288,10 +295,12 @@ class VGGn(nn.Module):
         auxillery_layers = []
         first_layer = True
         scale_cum = 1
+        max_pool = False
         for x in cfg:
             if x == 'M':
                 layers += [Maxpool_Layer_Local_Loss()]
                 auxillery_layers += [nn.Identity()]
+                max_pool = True
                 scale_cum *= 2
             else:
                 x = int(x * feat_mult)
@@ -314,6 +323,10 @@ class VGGn(nn.Module):
                                 pooling=self.pooling, bn=self.aux_bn, 
                                 dropout=self.dropout)]
                 else:
+                    #if max_pool:
+                    #    mp = Maxpool_Layer_Local_Loss()
+                    #else:
+                    #    mp = nn.Identity()
                     layers += [LocalLossBlockConv(input_ch, x, kernel_size=3, stride=1, padding=1,
                                                   num_classes=self.num_classes,
                                                   dim_out=input_dim // scale_cum,
@@ -332,6 +345,8 @@ class VGGn(nn.Module):
                                 dropout=self.dropout)]
                 input_ch = x
                 first_layer = False
+                max_pool = False
+
 
         return nn.ModuleList(layers), nn.ModuleList(auxillery_layers), input_dim // scale_cum
 
