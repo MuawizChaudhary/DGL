@@ -128,7 +128,10 @@ def optim_init(ncnn, model, args):
     layer_lr = [args.lr] * ncnn
     for n in range(ncnn):
         to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
-        if len(list(to_train)) != 0:
+        length = len(list(to_train))
+        print(len(list(model.main_cnn.blocks[n].parameters())))
+        print(length)
+        if length != 0:
             to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
             if args.optim == "adam":
                 layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n],
@@ -243,7 +246,6 @@ def main():
     for epoch in range(0, args.epochs+1):
         # Make sure we set the bn right
         model.train()
-        top1 = [AverageMeter() for _ in range(n_cnn)]
         losses = [AverageMeter() for _ in range(n_cnn)]
 
         
@@ -262,14 +264,10 @@ def main():
                 optimizer = layer_optim[n]
 
                 # Forward
-                if optimizer is not None: # some layers are just down-samplings for instance
-                    optimizer.zero_grad()
 
                 outputs, representation = model(representation, n=n)
 
                 if optimizer is not None:
-                    if isinstance(model.main_cnn.blocks[n], torch.nn.Linear): # if final layer, the representation is empty
-                        outputs = representation
                     loss = loss_calc(outputs, targets, target_onehot,
                             model.main_cnn.blocks[n], args.loss_sup, args.beta,
                             args.no_similarity_std)
@@ -278,8 +276,7 @@ def main():
                     optimizer.step()  
                     representation.detach_()
                     losses[n].update(float(loss.item()), float(targets.size(0)))
-                    if args.lr_schd == 'cyclic':
-                        layer_schd[n].step()
+                    optimizer.zero_grad()
 
         if args.lr_schd == 'nokland' or args.lr_schd == 'step':
             for n in range(n_cnn):
@@ -295,14 +292,7 @@ def main():
                 if optimizer is not None:
                     for param_group in optimizer.param_groups:
                         param_group['lr'] = args.lr_schedule[closest_i]
-        elif args.lr_schd == 'expo':
-            for n in range(n_cnn): 
-                if layer_optim[n] is not None:
-                    layer_schd[n].step()
-
-
-
-
+        
 
         # We now log the statistics
         print('epoch: ' + str(epoch) + ' , lr: ' + str(lr_scheduler(layer_lr[-1], epoch-1, args)))
