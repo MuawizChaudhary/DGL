@@ -1,0 +1,12 @@
+{
+  "type": "service_account",
+  "project_id": "dglresearch",
+  "private_key_id": "aad33a0a55a9b669599997746da72746cb0ba60c",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCyzNUExZ/TEIVi\nNhBhpJCdCsUNx+f3BwCPaaaaaKU2W8CGwuvkGx3RXgdTBsTrXANnnXrv6eYqXWxH\nq49WcHedymsAS9g5wAVUz3ihsAICwf+6wcjOb8hLEdYBIbKO9uNoh+gyKAy+tZNU\naL1WXL/N5n/um/4hRU3Zo+vKjIN1bUqdzkKtXbNkJgG1z4Mey4P3h5XxVJQ8x7zF\nJ/nRNKSrvoAhIAFXR/DTLFzP9rzWm849MI9DHlck0S6OMCjDfekvDrDb3V5oRtPO\n1WSHYCVZ8E1Y2VlYOZD9RZTiqX2J6iGk7U4RVSaZtOeMdf60Tc4DAZfggpO9IaKo\ntjpwZsCRAgMBAAECggEAAlsXjW4LKo1DrKUYtyijbSZIrWNOZ59Ufw89zjgFwT8Z\nPM1RrVo8HNeX0hy7OHyoYNOe3I1g5nr/o7wbceCeetpBaaoWKcChcVogdUTr6dxj\ngbLu8eVgJrkP8Ejg4OhY27Y6tXp4nISo8cpFgF9NeamJUvwEL60Jlw4FW9BZJRFr\nb5oPmH8SHsvql6xOUzSPCWHgt+uaGprJb6t8QtWnfoOUWo6Y6CUa6lWU24drnegm\nBMUSVu9nm+QH28EIcrjvxNDdKkY7+Faf+bWiaOcsZTNOb7VeGrF14d9DFNiJv/95\nP+Ll174nu5+eD7eL39dKq4oGusv0hX8jccWcbbih7wKBgQDdesfv4rJwL99Nor5X\n8MasYTbG+rKpLSmwk6wxB8uBHajMeuVsCGMJLt5kYTYYHg78YsErm2bAVDy8Q5Q3\nTkOF4EqFOaOUoyNE9DHzeabhTwKp/2kaorxgdJIQWNXM+jLKigDAlvahw+aoKFgo\nhm3pnxC8Y0Kv7zpgODe4NFcbnwKBgQDOqxq4nITV2M4S6u0AClQ5SnH7pESGDW0e\nSmj6pZAs2Agae7NBoebQYxUj1RmKYvDAYsiX+s3PpiTAn25gHOoyKtq1J16gPjfF\n5d8k/53m/TsftpZlhziI7ljP9Rzjiw371ae0RgsSBP0I49y8H5hKuNIX33lPb7o2\nwWnYQpC1zwKBgQCFe1xIvW4hoxiIJ89kHN8AQU7MOYe34lo/66BZpIMH/CIhqufe\nZmeZvz+Va+k4O9V4UuRtLamNvLcmF+yaMHcNlpITHRvzlybIhgwc23KyU/YdEqv7\nu5yg3WCyrXedpCU8YFP3voRCFllLe5U2R16y8IUbpQ8qDZo3J2qdgB4HrQKBgA6t\n6pz4SRsjZifD1gettCPJnOUB2vgmlfyTzncXMXFt+s1ewfHEfS+KCiNcbI7+zhjs\nK1FYOCwqoeuop19eTmg30QcS/86j/LQqyrnHCkEw9XUgM/iMLUDUpSxIPcAPzXN4\nzouoefrSreJmxPP7zoZoMEwPzH8O8YwYGtuIhtzTAoGAdzpbsUJ2BzQUahVeN7ap\nqRQZ5Beww24lXuyyrgDnnK+hnOSkKwO5EaSnxBaZhlhRA6bFlkk0OgAZka2qIWiC\nOHWGxRy+OPu/Zk2O9501wHqS4U3QpYSIzm112VvArADP9/tZFEfhRV5NQ1u6GzTe\ngC8EQU/en5jBNT2eQOLWdcE=\n-----END PRIVATE KEY-----\n",
+  "client_email": "dgl-research@dglresearch.iam.gserviceaccount.com",
+  "client_id": "110027288703659522189",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/dgl-research%40dglresearch.iam.gserviceaccount.com"
+}
