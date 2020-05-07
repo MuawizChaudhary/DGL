@@ -3,14 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
-class View(nn.Module):
-    def __init__(self):
-        super(View, self).__init__()
-
-    def forward(self, x):
-        return x.view(x.shape[0], -1)
-
-
 class rep(nn.Module):
     def __init__(self, blocks):
         super(rep, self).__init__()
@@ -26,6 +18,14 @@ class rep(nn.Module):
 
         out, out_return = self.blocks[n](x)
         return out, out_return
+
+
+class View(nn.Module):
+    def __init__(self):
+        super(View, self).__init__()
+
+    def forward(self, x):
+        return x.view(x.shape[0], -1)
 
 
 class LocalLossBlockLinear(nn.Module):
@@ -103,6 +103,7 @@ class LocalLossBlockConv(nn.Module):
         self.num_classes = num_classes
         self.first_layer = first_layer
         self.dropout_p = dropout
+
         if max_pool:
             mp = nn.MaxPool2d(kernel_size=2, stride=2)
         else:
@@ -132,65 +133,6 @@ class LocalLossBlockConv(nn.Module):
         return h, h_return
 
 
-class Net(nn.Module):
-    '''
-    A fully connected network.
-    The network can be trained by backprop or by locally generated error signal based on cross-entropy and/or similarity matching loss.
-
-    Args:
-        num_layers (int): Number of hidden layers.
-        num_hidden (int): Number of units in each hidden layer.
-        input_dim (int): Feature map height/width for input.
-        input_ch (int): Number of feature maps for input.
-        num_classes (int): Number of classes (used in local prediction loss).
-    '''
-
-    def __init__(self, num_layers, num_hidden, input_dim, input_ch,
-                 num_classes, no_similarity_std, dropout=0.0, nonlin='relu',
-                 loss_sup="predsim", dim_in_decoder=2048, 
-                 aux_type="nokland", n_mlp=0, bn=False,
-                 aux_bn=False):
-        super(Net, self).__init__()
-
-        self.num_hidden = num_hidden
-        self.num_layers = num_layers
-        reduce_factor = 1
-
-        self.layers = nn.ModuleList([LocalLossBlockLinear(input_dim * input_dim * input_ch,
-                                                          num_hidden, num_classes, dropout=dropout, nonlin=nonlin,
-                                                          first_layer=True,
-                                                          bn=bn)])
-
-        self.auxillery_layers = nn.ModuleList([auxillary_linear_classifier(num_hidden,
-                num_classes=num_classes,
-                n_mlp=n_mlp, 
-                loss_sup=loss_sup, bn=aux_bn,
-                dropout=dropout)])
-
-        for i in range(1, num_layers):
-            layer = LocalLossBlockLinear(int(num_hidden // (reduce_factor ** (i - 1))),
-                                         int(num_hidden // (reduce_factor ** i)),
-                                         num_classes, dropout=dropout, nonlin=nonlin)
-            self.layers.extend([layer])
-
-        #TODO fix
-        for i in range(1, num_layers):
-            aux = Auxillery("linear", int(num_hidden // (reduce_factor ** i)),
-                            num_classes, int(num_hidden // (reduce_factor ** i)),
-                            no_similarity_std, loss_sup, dim_in_decoder)
-            self.auxillery_layers.extend([aux])
-
-        layer_out = Linear_Layer_Local_Loss(int(num_hidden // (reduce_factor ** (num_layers - 1))), num_classes)
-        #layer_out.weight.data.zero_()
-
-
-        self.layers.extend([layer_out])
-        self.auxillery_layers.extend([Final_Layer_Local_Loss()])
-
-    def parameters(self):
-        return self.layer_out.parameters()
-
-
 class Linear_Layer_Local_Loss(nn.Module):
     def __init__(self, input_size, output_size):
         super(Linear_Layer_Local_Loss, self).__init__()
@@ -202,14 +144,12 @@ class Linear_Layer_Local_Loss(nn.Module):
         return h, h
 
 
-
 class Final_Layer_Local_Loss(nn.Module):
     def __init__(self):
         super(Final_Layer_Local_Loss, self).__init__()
 
     def forward(self, x):
         return x, None
-
 
 
 cfg = {
@@ -225,15 +165,6 @@ cfg = {
     'vgg19': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
 }
 
-
-class Maxpool_Layer_Local_Loss(nn.Module):
-    def __init__(self):
-        super(Maxpool_Layer_Local_Loss, self).__init__()
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-
-    def forward(self, x):
-        h = self.maxpool(x)
-        return h
 
 
 class VGGn(nn.Module):
@@ -278,14 +209,14 @@ class VGGn(nn.Module):
             if isinstance(layer, int):
                 output_ch = layer
         if num_layers > 0:
-            classifier = Net(num_layers, num_hidden, output_dim,
+            layers, aux_layers = self.generate_classifier(num_layers, num_hidden, output_dim,
                              int(output_ch * feat_mult), num_classes,
                              self.no_similarity_std, self.dropout, nonlin=nonlin,
                              loss_sup=loss_sup, dim_in_decoder=dim_in_decoder,
                              aux_type=aux_type, n_mlp=n_mlp,
                              bn=bn, aux_bn=aux_bn)
-            features.extend([*classifier.layers])
-            auxillery_layers.extend([*classifier.auxillery_layers])
+            features.extend([*layers])
+            auxillery_layers.extend([*aux_layers])
         else:
             classifier = nn.Linear(output_dim * output_dim * int(output_ch * feat_mult), num_classes)
             features.append(classifier)
@@ -307,8 +238,6 @@ class VGGn(nn.Module):
         max_pool = False
         for x in cfg:
             if x == 'M':
-                #layers += [Maxpool_Layer_Local_Loss()]
-                #auxillery_layers += [Final_Layer_Local_Loss()]
                 max_pool = True
                 scale_cum *= 2
             else:
@@ -321,7 +250,7 @@ class VGGn(nn.Module):
                                                   dropout=self.dropout,
                                                   nonlin=self.nonlin,
                                                   first_layer=first_layer,
-                                                  bn=self.bn)]
+                                                  bn=self.bn, max_pool=max_pool)]
 
                     auxillery_layers += [auxillary_conv_classifier(x, input_dim // scale_cum,
                                 cnn=False, num_classes=self.num_classes,
@@ -332,10 +261,6 @@ class VGGn(nn.Module):
                                 pooling=self.pooling, bn=self.aux_bn, 
                                 dropout=self.dropout)]
                 else:
-                    #if max_pool:
-                    #    mp = Maxpool_Layer_Local_Loss()
-                    #else:
-                    #    mp = nn.Identity()
                     layers += [LocalLossBlockConv(input_ch, x, kernel_size=3, stride=1, padding=1,
                                                   num_classes=self.num_classes,
                                                   dim_out=input_dim // scale_cum,
@@ -355,10 +280,30 @@ class VGGn(nn.Module):
                 input_ch = x
                 first_layer = False
                 max_pool = False
-
-
         return nn.ModuleList(layers), nn.ModuleList(auxillery_layers), input_dim // scale_cum
 
+
+    def generate_classifier(self, num_layers, num_hidden, input_dim, input_ch,
+                 num_classes, no_similarity_std, dropout=0.0, nonlin='relu',
+                 loss_sup="predsim", dim_in_decoder=2048, 
+                 aux_type="nokland", n_mlp=0, bn=False,
+                 aux_bn=False):
+        layers = nn.ModuleList([LocalLossBlockLinear(input_dim * input_dim * input_ch,
+                                                          num_hidden, num_classes, dropout=dropout, nonlin=nonlin,
+                                                          first_layer=True,
+                                                          bn=bn)])
+
+        auxillery_layers = nn.ModuleList([auxillary_linear_classifier(num_hidden,
+                num_classes=num_classes,
+                n_mlp=n_mlp, 
+                loss_sup=loss_sup, bn=aux_bn,
+                dropout=dropout)])
+
+        layer_out = Linear_Layer_Local_Loss(num_hidden, num_classes)
+
+        layers.extend([layer_out])
+        auxillery_layers.extend([Final_Layer_Local_Loss()])
+        return layers, auxillery_layers
 
 
 class auxillary_conv_classifier(nn.Module):
@@ -414,9 +359,6 @@ class auxillary_conv_classifier(nn.Module):
                 self.pool = nn.Identity()
                 self.bn = nn.Identity()
 
-        #dropout=0.0
-
-
         if pooling == "adaptiveavg":
             self.dim_in_decoder = feature_size*4
             self.pre_conv_pool = nn.AdaptiveAvgPool2d((math.ceil(self.in_size / 4), math.ceil(self.in_size / 4)))
@@ -424,7 +366,6 @@ class auxillary_conv_classifier(nn.Module):
         else:
             self.pre_conv_pool = nn.Identity()
 
-        
         if n_mlp > 0:
             mlp_feat = self.dim_in_decoder
 
@@ -437,7 +378,8 @@ class auxillary_conv_classifier(nn.Module):
                     bn_temp = nn.Identity()
                 dropout_temp = torch.nn.Dropout(p=dropout, inplace=False)
                 layers += [nn.Linear(mlp_feat, mlp_feat),
-                           bn_temp, nn.ReLU(True), dropout_temp]#True
+                           bn_temp, nn.ReLU(True), dropout_temp]
+
             self.mlp = True
             self.preclassifier = nn.Sequential(*layers)
             self.classifier = nn.Linear(mlp_feat, num_classes)
@@ -464,14 +406,10 @@ class auxillary_conv_classifier(nn.Module):
         if self.loss_sup == "predsim":
             loss_sim = self.sim_loss(x)
 
-        #if self.pooling == 'adapativeavg':
-        #    x = F.adaptive_avg_pool2d(x, (math.ceil(self.in_size / 4), math.ceil(self.in_size / 4)))
         x = self.pre_conv_pool(x)
         for block in self.blocks:
             x = block(x)
         out = self.pool(x)
-        #if not self.mlp:
-        #    out = self.bn(out)
         out = out.view(out.size(0), -1)
         out = self.preclassifier(out)
         out = self.classifier(out)
@@ -499,7 +437,7 @@ class auxillary_linear_classifier(nn.Module):
                     bn_temp = nn.Identity()
                 dropout_temp = torch.nn.Dropout(p=dropout, inplace=False)
                 layers += [nn.Linear(in_feat, mlp_feat),
-                           bn_temp, nn.ReLU(True), dropout_temp]#True
+                           bn_temp, nn.ReLU(True), dropout_temp]
 
             self.preclassifier = nn.Sequential(*layers)
             self.classifier = nn.Linear(mlp_feat, num_classes)
@@ -527,9 +465,7 @@ class auxillary_linear_classifier(nn.Module):
 
         if self.loss_sup == "predsim":
             loss_sim = self.sim_loss(x)
-        #x = self.bn(x)
 
-        #out = x.view(x.size(0), -1)
         out = self.preclassifier(x)
         out = self.classifier(out)
         return out, loss_sim
