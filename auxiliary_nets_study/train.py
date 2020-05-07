@@ -23,6 +23,9 @@ import ast
 
 import torch.optim as optim
 from torchvision import datasets, transforms
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+
 
 # Training settings
 # dgl arguments
@@ -89,20 +92,8 @@ parser.add_argument('--bn', action='store_true', default=False,
                     help='batch norm in main model')
 parser.add_argument('--aux-bn', action='store_true', default=False,
                     help='batch norm in auxillary layers')
+parser.add_argument('--notes', nargs='+', default="none", type=str, help="notes for wandb")
 
-
-args = parser.parse_args()
-args.cuda = not args.no_cuda and torch.cuda.is_available()
-
-wandb.init(config=args, project="dgl-refactored")
-import uuid
-filename = "logs/" + str(uuid.uuid4())
-import git
-repo = git.Repo(search_parent_directories=True)
-sha = repo.head.object.hexsha
-print(filename)
-print(sha)
-print(filename)
 
 
 
@@ -133,7 +124,23 @@ def optim_init(ncnn, model, args):
 
 
 def main():
-    global args, best_prec1
+    args = parser.parse_args()
+    args.cuda = not args.no_cuda and torch.cuda.is_available()
+    
+    run = wandb.init(config=args, project="dgl-refactored", notes=args.notes)
+    import uuid
+    filename = "logs/" + str(uuid.uuid4())
+    import git
+    repo = git.Repo(search_parent_directories=True)
+    sha = repo.head.object.hexsha
+    print(filename)
+    print(sha)
+    print(filename)
+
+
+    #global args, best_prec1
+
+
 
     repo = git.Repo(search_parent_directories=True)
     sha = repo.head.object.hexsha
@@ -146,6 +153,10 @@ def main():
     torch.manual_seed(args.seed)
     if args.cuda:
         torch.cuda.manual_seed(args.seed)
+
+    url = 'https://app.wandb.ai/muawizc/dgl-refactored/runs/' + run.id
+    insert_row = [sha, args.lr_schd, '', run.id, url, '0', url + "/overview", '', run.notes]
+
 
     # data loader
     train_transform = transforms.Compose([
@@ -210,6 +221,14 @@ def main():
 
     n_cnn = len(model.main_cnn.blocks)
 
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+    
+    creds = ServiceAccountCredentials.from_json_keyfile_name("creds.json", scope)
+    
+    client = gspread.authorize(creds)
+    
+    sheet = client.open("Tutorial").sheet1
+    sheet.append_row(insert_row, table_range='A1')
 
     # Define optimizer en local lr
     layer_optim, layer_lr = optim_init(n_cnn, model, args)
@@ -268,6 +287,9 @@ def main():
                 top1test = validate(test_loader, model, epoch, n, args.loss_sup, args.cuda)
                 print("n: {}, epoch {}, test top1:{} "
                       .format(n + 1, epoch, top1test))
+    col = sheet.col_values(4)
+    index = col.index(wandb.id)
+    sheet.update_cell(index + 1, 6, top1test)
 
 
 if __name__ == '__main__':
