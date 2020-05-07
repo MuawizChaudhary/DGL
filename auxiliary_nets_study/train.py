@@ -129,7 +129,7 @@ def optim_init(ncnn, model, args):
     for n in range(ncnn):
         to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
         length = len(list(to_train))
-        print(len(list(model.main_cnn.blocks[n].parameters())))
+        #print(len(list(model.main_cnn.blocks[n].parameters())))
         print(length)
         if length != 0:
             to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
@@ -186,14 +186,14 @@ def main():
     train_loader = torch.utils.data.DataLoader(
         dataset_train,
         sampler=None,
-        batch_size=args.batch_size, shuffle=True, num_workers=8)
+        batch_size=args.batch_size, shuffle=True, num_workers=4)
     test_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10('../data/CIFAR10', train=False,
                          transform=transforms.Compose([
                              transforms.ToTensor(),
                              transforms.Normalize((0.424, 0.415, 0.384), (0.283, 0.278, 0.284))
                          ])),
-        batch_size=1000, shuffle=False, num_workers=8)#args.batch_size
+        batch_size=1000, shuffle=False, num_workers=2)#args.batch_size
 
 
     # Model
@@ -263,9 +263,7 @@ def main():
             representation = inputs
             for n in range(n_cnn):
                 optimizer = layer_optim[n]
-
                 # Forward
-
                 pred, sim, representation = model(representation, n=n)
 
                 if optimizer is not None:

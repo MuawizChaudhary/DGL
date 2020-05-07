@@ -41,11 +41,16 @@ class LocalLossBlockLinear(nn.Module):
     '''
 
     def __init__(self, num_in, num_out, num_classes, dropout=0.0,
-                 nonlin="relu", first_layer=False, bn=False):
+                 nonlin="relu", first_layer=False, bn=False, max_pool=True):
         super(LocalLossBlockLinear, self).__init__()
         self.num_classes = num_classes
         self.first_layer = first_layer
         self.dropout_p = dropout
+
+        if max_pool:
+            mp = nn.MaxPool2d(kernel_size=2, stride=2)
+        else:
+            mp = nn.Identity()
 
         encoder = nn.Linear(num_in, num_out, bias=True)
 
@@ -61,7 +66,7 @@ class LocalLossBlockLinear(nn.Module):
         elif nonlin == 'leakyrelu':
             nonlin = nn.LeakyReLU(negative_slope=0.01, inplace=True)
 
-        self.MLP = nn.Sequential(View(), encoder, batchnorm, nonlin)
+        self.MLP = nn.Sequential(mp, View(), encoder, batchnorm, nonlin)
 
         self.dropout = torch.nn.Dropout(p=self.dropout_p, inplace=False)
 
@@ -91,13 +96,17 @@ class LocalLossBlockConv(nn.Module):
 
     def __init__(self, ch_in, ch_out, kernel_size, stride, padding,
                  num_classes, dim_out, dropout=0.0, nonlin="relu",
-                 first_layer=False, bn=False):
+                 first_layer=False, bn=False, max_pool=False):
         super(LocalLossBlockConv, self).__init__()
         self.ch_in = ch_in
         self.ch_out = ch_out
         self.num_classes = num_classes
         self.first_layer = first_layer
         self.dropout_p = dropout
+        if max_pool:
+            mp = nn.MaxPool2d(kernel_size=2, stride=2)
+        else:
+            mp = nn.Identity()
 
         encoder = nn.Conv2d(ch_in, ch_out, kernel_size, stride=stride, padding=padding)
 
@@ -113,7 +122,7 @@ class LocalLossBlockConv(nn.Module):
         elif nonlin == 'leakyrelu':
             nonlin = nn.LeakyReLU(negative_slope=0.01, inplace=True)
 
-        self.MLP = nn.Sequential(encoder, batchnorm, nonlin)
+        self.MLP = nn.Sequential(mp, encoder, batchnorm, nonlin)
 
         self.dropout = torch.nn.Dropout2d(p=self.dropout_p, inplace=False)
 
@@ -224,7 +233,7 @@ class Maxpool_Layer_Local_Loss(nn.Module):
 
     def forward(self, x):
         h = self.maxpool(x)
-        return h, h
+        return h
 
 
 class VGGn(nn.Module):
@@ -298,8 +307,8 @@ class VGGn(nn.Module):
         max_pool = False
         for x in cfg:
             if x == 'M':
-                layers += [Maxpool_Layer_Local_Loss()]
-                auxillery_layers += [Final_Layer_Local_Loss()]
+                #layers += [Maxpool_Layer_Local_Loss()]
+                #auxillery_layers += [Final_Layer_Local_Loss()]
                 max_pool = True
                 scale_cum *= 2
             else:
@@ -333,7 +342,7 @@ class VGGn(nn.Module):
                                                   dropout=self.dropout,
                                                   nonlin=self.nonlin,
                                                   first_layer=first_layer,
-                                                  bn=self.bn)]
+                                                  bn=self.bn, max_pool=max_pool)]
 
                     auxillery_layers += [auxillary_conv_classifier(x, input_dim // scale_cum,
                                 cnn=False, num_classes=self.num_classes,
