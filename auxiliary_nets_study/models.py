@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
+
 class rep(nn.Module):
     def __init__(self, blocks):
         super(rep, self).__init__()
@@ -26,6 +27,25 @@ class View(nn.Module):
 
     def forward(self, x):
         return x.view(x.shape[0], -1)
+
+
+class Linear_Layer_Local_Loss(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(Linear_Layer_Local_Loss, self).__init__()
+        self.linear = nn.Linear(input_size, output_size)
+        self.linear.weight.data.zero_()
+
+    def forward(self, x):
+        h = self.linear(x)
+        return h, h
+
+
+class Final_Layer_Local_Loss(nn.Module):
+    def __init__(self):
+        super(Final_Layer_Local_Loss, self).__init__()
+
+    def forward(self, x):
+        return x, None
 
 
 class LocalLossBlockLinear(nn.Module):
@@ -133,25 +153,6 @@ class LocalLossBlockConv(nn.Module):
         return h, h_return
 
 
-class Linear_Layer_Local_Loss(nn.Module):
-    def __init__(self, input_size, output_size):
-        super(Linear_Layer_Local_Loss, self).__init__()
-        self.linear = nn.Linear(input_size, output_size)
-        self.linear.weight.data.zero_()
-
-    def forward(self, x):
-        h = self.linear(x)
-        return h, h
-
-
-class Final_Layer_Local_Loss(nn.Module):
-    def __init__(self):
-        super(Final_Layer_Local_Loss, self).__init__()
-
-    def forward(self, x):
-        return x, None
-
-
 cfg = {
     'vgg6a': [128, 'M', 256, 'M', 512, 'M', 512],
     'vgg6b': [128, 'M', 256, 'M', 512, 'M', 512, 'M'],
@@ -164,7 +165,6 @@ cfg = {
     'vgg16': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'],
     'vgg19': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
 }
-
 
 
 class VGGn(nn.Module):
@@ -181,7 +181,7 @@ class VGGn(nn.Module):
     '''
 
     def __init__(self, vggname, input_dim=32, input_ch=3, num_classes=10,
-                 feat_mult=1, dropout=0.0, nonlin="relu", no_similarity_std=False,
+                 feat_mult=1, dropout=0.0, nonlin="relu", 
                  loss_sup="predsim", dim_in_decoder=2048,
                  num_layers=0, num_hidden=1024,
                  aux_type="nokland", n_mlp=0, n_conv=0, 
@@ -191,7 +191,6 @@ class VGGn(nn.Module):
         self.input_dim = input_dim
         self.input_ch = input_ch
         self.num_classes = num_classes
-        self.no_similarity_std = no_similarity_std
         self.dropout = dropout
         self.nonlin = nonlin
         self.loss_sup = loss_sup
@@ -211,7 +210,7 @@ class VGGn(nn.Module):
         if num_layers > 0:
             layers, aux_layers = self.generate_classifier(num_layers, num_hidden, output_dim,
                              int(output_ch * feat_mult), num_classes,
-                             self.no_similarity_std, self.dropout, nonlin=nonlin,
+                             self.dropout, nonlin=nonlin,
                              loss_sup=loss_sup, dim_in_decoder=dim_in_decoder,
                              aux_type=aux_type, n_mlp=n_mlp,
                              bn=bn, aux_bn=aux_bn)
@@ -282,9 +281,8 @@ class VGGn(nn.Module):
                 max_pool = False
         return nn.ModuleList(layers), nn.ModuleList(auxillery_layers), input_dim // scale_cum
 
-
     def generate_classifier(self, num_layers, num_hidden, input_dim, input_ch,
-                 num_classes, no_similarity_std, dropout=0.0, nonlin='relu',
+                 num_classes, dropout=0.0, nonlin='relu',
                  loss_sup="predsim", dim_in_decoder=2048, 
                  aux_type="nokland", n_mlp=0, bn=False,
                  aux_bn=False):

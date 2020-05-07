@@ -35,7 +35,6 @@ parser.add_argument('--epochs', type=int, default=400, metavar='N',
                     help='number of epochs to train (default: 10)')
 parser.add_argument('--seed', type=int, default=25, metavar='S',
                     help='random seed (default: 1)')
-parser.add_argument('--type_aux', type=str, default='mlp', metavar='N')
 parser.add_argument('--block_size', type=int, default=1, help='block size')
 parser.add_argument('--name', default='', type=str, help='name')
 parser.add_argument('--no-cuda', action='store_true', default=False,
@@ -82,11 +81,9 @@ parser.add_argument('--lr-decay-epoch', type=int, default=80,
 parser.add_argument('--n-conv',  default=0,type=int,
                     help='number of conv layers in aux classifiers')
 parser.add_argument('--lr-schd', default='nokland',
-                    help='nokland or cyclic (default: nokland)')
+                    help='nokland, step, or constant (default: nokland)')
 parser.add_argument('--base-lr', type=float, default=1e-4, help='block size')
 parser.add_argument('--lr-schedule', nargs='+', type=float, default=[1e-2, 1e-3, 5e-4, 1e-4])
-parser.add_argument('--gamma', type=float, default=0.95,
-                    help='learning rate decay factor to use at milestone epochs (default: 0.25)')
 parser.add_argument('--pooling', default="avg", help='pooling type')
 parser.add_argument('--bn', action='store_true', default=False,
                     help='batch norm in main model')
@@ -104,9 +101,7 @@ import git
 repo = git.Repo(search_parent_directories=True)
 sha = repo.head.object.hexsha
 print(filename)
-#sys.stdout = open(filename, "w",buffering=1)
 print(sha)
-#print(" ".join(str(item) for item in sys.argv[0:]))
 print(filename)
 
 
@@ -128,36 +123,13 @@ def optim_init(ncnn, model, args):
     layer_lr = [args.lr] * ncnn
     for n in range(ncnn):
         to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
-        length = len(list(to_train))
-        #print(len(list(model.main_cnn.blocks[n].parameters())))
-        print(length)
-        if length != 0:
-            to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
-            if args.optim == "adam":
-                layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n],
-                        weight_decay=args.weight_decay, amsgrad=args.optim == 'amsgrad')
-            elif args.optim == "sgd":
-                layer_optim[n] = optim.SGD(to_train, lr=layer_lr[n],
-                        momentum=args.momentum, weight_decay=args.weight_decay)
-        else:
-            layer_optim[n] = None
+        if args.optim == "adam":
+            layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n],
+                    weight_decay=args.weight_decay, amsgrad=args.optim == 'amsgrad')
+        elif args.optim == "sgd":
+            layer_optim[n] = optim.SGD(to_train, lr=layer_lr[n],
+                    momentum=args.momentum, weight_decay=args.weight_decay)
     return layer_optim, layer_lr
-
-
-def lr_schd_init(n_cnn, layer_optim, args):
-    layer_schd = [None] * n_cnn
-    if args.lr_schd == 'cyclic':
-        layer_schd = [None] * n_cnn
-        for n in range(n_cnn): 
-            if layer_optim[n] is not None:
-                layer_schd[n] = torch.optim.lr_scheduler.CyclicLR(layer_optim[n],
-                        args.base_lr, args.lr)
-    elif args.lr_schd == 'expo':
-        layer_schd = [None] * n_cnn
-        for n in range(n_cnn): 
-            if layer_optim[n] is not None:
-                layer_schd[n] = torch.optim.lr_scheduler.ExponentialLR(layer_optim[n],
-                        gamma=args.gamma)
 
 
 def main():
@@ -193,12 +165,12 @@ def main():
                              transforms.ToTensor(),
                              transforms.Normalize((0.424, 0.415, 0.384), (0.283, 0.278, 0.284))
                          ])),
-        batch_size=1000, shuffle=False, num_workers=8)#args.batch_size
+        batch_size=args.test_batch_size, shuffle=False, num_workers=8)
 
 
     # Model
     if args.model.startswith('vgg'):
-        model = VGGn(args.model, feat_mult=args.feat_mult, dropout=args.dropout,nonlin=args.nonlin, no_similarity_std=args.no_similarity_std,
+        model = VGGn(args.model, feat_mult=args.feat_mult, dropout=args.dropout,nonlin=args.nonlin,
                       loss_sup= args.loss_sup, dim_in_decoder=args.dim_in_decoder, num_layers=args.num_layers,
             num_hidden = args.num_hidden, aux_type=args.aux_type,
             n_mlp=args.n_mlp, n_conv=args.n_conv, pooling=args.pooling,
@@ -241,7 +213,6 @@ def main():
 
     # Define optimizer en local lr
     layer_optim, layer_lr = optim_init(n_cnn, model, args)
-    layer_schd = lr_schd_init(n_cnn, layer_optim, args)
 ######################### Lets do the training
     for epoch in range(0, args.epochs+1):
         # Make sure we set the bn right
@@ -253,8 +224,7 @@ def main():
             if args.cuda:
                 targets = targets.cuda(non_blocking = True)
                 inputs = inputs.cuda(non_blocking = True)
-                #inputs = torch.autograd.Variable(inputs)
-
+            
             target_onehot = to_one_hot(targets, 10)
             if args.cuda:
                 target_onehot = target_onehot.cuda(non_blocking = True)
@@ -266,46 +236,38 @@ def main():
                 # Forward
                 pred, sim, representation = model(representation, n=n)
 
-                if optimizer is not None:
-                    loss = loss_calc(pred, sim, targets, target_onehot,
-                            args.loss_sup, args.beta,
-                            args.no_similarity_std)
-
-                    loss.backward()
-                    optimizer.step()  
-                    representation.detach_()
-                    losses[n].update(float(loss.item()), float(targets.size(0)))
-                    optimizer.zero_grad()
+                loss = loss_calc(pred, sim, targets, target_onehot,
+                        args)#.loss_sup, args.beta,
+                        #args.no_similarity_std)
+                loss.backward()
+                optimizer.step()  
+                representation.detach_()
+                losses[n].update(float(loss.item()), float(targets.size(0)))
+                optimizer.zero_grad()
 
         if args.lr_schd == 'nokland' or args.lr_schd == 'step':
             for n in range(n_cnn):
                 layer_lr[n] = lr_scheduler(layer_lr[n], epoch-1, args)
                 optimizer = layer_optim[n]
-                if optimizer is not None: 
-                    for param_group in optimizer.param_groups:
-                        param_group['lr'] = layer_lr[n]
+                for param_group in optimizer.param_groups:
+                    param_group['lr'] = layer_lr[n]
         elif args.lr_schd == 'constant':
             closest_i = max([c for c, i in enumerate(args.lr_decay_milestones) if i <= epoch])
             for n in range(n_cnn):
                 optimizer = layer_optim[n]
-                if optimizer is not None:
-                    for param_group in optimizer.param_groups:
-                        param_group['lr'] = args.lr_schedule[closest_i]
+                for param_group in optimizer.param_groups:
+                    param_group['lr'] = args.lr_schedule[closest_i]
         
 
         # We now log the statistics
         print('epoch: ' + str(epoch) + ' , lr: ' + str(lr_scheduler(layer_lr[-1], epoch-1, args)))
             
-        #test(epoch, model, test_loader)
         for n in range(n_cnn):
             if layer_optim[n] is not None:
                 wandb.log({"Layer " + str(n) + " train loss": losses[n].avg}, step=epoch)
                 top1test = validate(test_loader, model, epoch, n, args.loss_sup, args.cuda)
                 print("n: {}, epoch {}, test top1:{} "
                       .format(n + 1, epoch, top1test))
-
-
-
 
 
 if __name__ == '__main__':

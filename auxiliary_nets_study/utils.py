@@ -6,11 +6,9 @@ import wandb
 
 def to_one_hot(y, n_dims=None):
     ''' Take integer tensor y with n dims and convert it to 1-hot representation with n+1 dims. '''
-    y_tensor = y.type(torch.LongTensor).view(-1, 1)
-    n_dims = n_dims if n_dims is not None else int(torch.max(y_tensor)) + 1
-    y_one_hot = torch.zeros(y_tensor.size()[0], n_dims).scatter_(1, y_tensor, 1)
-    y_one_hot = y_one_hot.view(*y.shape, -1)
+    y_one_hot = F.one_hot(y, num_classes=n_dims).float()
     return y_one_hot
+
 
 def similarity_matrix(x, no_similarity_std):
     ''' Calculate adjusted cosine similarity matrix of size x.size(0) x x.size(0). '''
@@ -25,19 +23,19 @@ def similarity_matrix(x, no_similarity_std):
     R = xn.matmul(xn.transpose(1,0)).clamp(-1,1)
     return R
 
-def loss_calc(y_hat_local, Rh, y, y_onehot, loss_sup, beta, no_similarity_std):
-    #Rh, y_hat_local = outputs
-    if loss_sup == 'pred':
+
+def loss_calc(y_hat_local, Rh, y, y_onehot, args):#loss_sup, beta, no_similarity_std):
+    if args.loss_sup == 'pred':
         loss_sup = F.cross_entropy(y_hat_local,  y)
-    elif loss_sup == 'predsim':
+    elif args.loss_sup == 'predsim':
         if Rh is not None:
-            Rh = similarity_matrix(Rh, no_similarity_std)
-            Ry = similarity_matrix(y_onehot, no_similarity_std).detach()
-            loss_pred = (1-beta) * F.cross_entropy(y_hat_local,  y)
-            loss_sim = beta * F.mse_loss(Rh, Ry)
+            Rh = similarity_matrix(Rh, args.no_similarity_std)
+            Ry = similarity_matrix(y_onehot, args.no_similarity_std).detach()
+            loss_pred = (1-args.beta) * F.cross_entropy(y_hat_local, y)
+            loss_sim = args.beta * F.mse_loss(Rh, Ry)
             loss_sup = loss_pred + loss_sim
         else:
-            loss_sup = (1-beta) * F.cross_entropy(y_hat_local,  y)
+            loss_sup = (1-args.beta) * F.cross_entropy(y_hat_local,  y)
     return loss_sup
 
 
@@ -61,6 +59,7 @@ class AverageMeter(object):
         self.count += n
         self.avg = self.sum / self.count
 
+
 def accuracy(output, target, topk=(1,)):
     """Computes the precision@k for the specified values of k"""
     maxk = max(topk)
@@ -77,9 +76,7 @@ def accuracy(output, target, topk=(1,)):
     return res
 
 
-
-
-def test(epoch, model, test_loader, cuda=True,num_classes=10):
+def test(epoch, model, test_loader, cuda=True, num_classes=10):
     ''' Run model on test set '''
     model.eval()
     correct = 0
@@ -118,9 +115,8 @@ def validate(val_loader, model, epoch, n, loss_sup, iscuda):
             representation = input
             for i in range(n):
                 output, _, representation = model(representation, n=i)
-                # measure accuracy and record loss
-                # measure elapsed time
             output, _, representation = model(representation, n=n)
+            
             # measure accuracy and record loss
             loss = F.cross_entropy(output, target)
             prec1 = accuracy(output.data, target)
