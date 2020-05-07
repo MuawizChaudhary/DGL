@@ -169,14 +169,14 @@ def main():
     train_loader = torch.utils.data.DataLoader(
         dataset_train,
         sampler=None,
-        batch_size=args.batch_size, shuffle=True, num_workers=8)
+        batch_size=args.batch_size, shuffle=True, num_workers=4)
     test_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10('../data/CIFAR10', train=False,
                          transform=transforms.Compose([
                              transforms.ToTensor(),
                              transforms.Normalize((0.424, 0.415, 0.384), (0.283, 0.278, 0.284))
                          ])),
-        batch_size=args.test_batch_size, shuffle=False, num_workers=8)
+        batch_size=args.test_batch_size, shuffle=False, num_workers=2)
 
 
     # Model
@@ -227,7 +227,7 @@ def main():
     
     client = gspread.authorize(creds)
     
-    sheet = client.open("Tutorial").sheet1
+    sheet = client.open("Spreadsheet DGL").sheet1
     sheet.append_row(insert_row, table_range='A1')
 
     # Define optimizer en local lr
@@ -288,7 +288,7 @@ def main():
                 print("n: {}, epoch {}, test top1:{} "
                       .format(n + 1, epoch, top1test))
     col = sheet.col_values(4)
-    index = col.index(wandb.id)
+    index = col.index(run.id)
     sheet.update_cell(index + 1, 6, top1test)
 
 

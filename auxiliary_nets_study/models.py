@@ -320,6 +320,8 @@ class auxillary_conv_classifier(nn.Module):
         self.pooling = pooling
         self.pool = nn.Identity()
         self.blocks = []
+        dropout =0.0
+
         
         for n in range(n_conv):
             if bn:
@@ -421,6 +423,7 @@ class auxillary_linear_classifier(nn.Module):
         super(auxillary_linear_classifier, self).__init__()
         feature_size = input_features
         self.loss_sup = loss_sup
+        dropout =0.0
 
         if n_mlp > 0:
             self.mlp = True
