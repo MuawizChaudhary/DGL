@@ -33,7 +33,7 @@ class Linear_Layer_Local_Loss(nn.Module):
     def __init__(self, input_size, output_size):
         super(Linear_Layer_Local_Loss, self).__init__()
         self.linear = nn.Linear(input_size, output_size)
-        #self.linear.weight.data.zero_()
+        self.linear.weight.data.zero_()
 
     def forward(self, x):
         h = self.linear(x)
@@ -383,7 +383,7 @@ class auxillary_conv_classifier(nn.Module):
             self.mlp = True
             self.preclassifier = nn.Sequential(*layers)
             self.classifier = nn.Linear(mlp_feat, num_classes)
-            #self.classifier.weight.data.zero_()
+            self.classifier.weight.data.zero_()
             if loss_sup == 'predsim':
                 self.sim_loss = nn.Conv2d(feature_size, feature_size, 3, stride=1, padding=1, bias=False)
 
@@ -391,7 +391,7 @@ class auxillary_conv_classifier(nn.Module):
             self.mlp = False
             self.preclassifier = nn.Identity()
             self.classifier = nn.Linear(self.dim_in_decoder, num_classes)
-            #self.classifier.weight.data.zero_()
+            self.classifier.weight.data.zero_()
             if loss_sup == 'predsim':
                 self.sim_loss = nn.Conv2d(feature_size, feature_size, 3, stride=1, padding=1, bias=False)
 
@@ -442,7 +442,7 @@ class auxillary_linear_classifier(nn.Module):
 
             self.preclassifier = nn.Sequential(*layers)
             self.classifier = nn.Linear(mlp_feat, num_classes)
-            #self.classifier.weight.data.zero_()
+            self.classifier.weight.data.zero_()
 
             if loss_sup == 'predsim':
                 self.sim_loss = nn.Linear(feature_size, feature_size, bias=False)
@@ -450,7 +450,7 @@ class auxillary_linear_classifier(nn.Module):
             self.mlp = False
             self.preclassifier = nn.Identity()
             self.classifier = nn.Linear(feature_size, num_classes)
-            #self.classifier.weight.data.zero_()
+            self.classifier.weight.data.zero_()
 
             if loss_sup == 'predsim':
                 self.sim_loss = nn.Linear(feature_size, feature_size, bias=False)
