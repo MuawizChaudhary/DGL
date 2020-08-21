@@ -255,6 +255,7 @@ def main():
                 sim=None
                 for m in range(n):
                     # Forward
+                    representation.detach_()
                     pred, sim, representation = model(representation, n=m)
 
                 optimizer = layer_optim[n-1]
@@ -265,7 +266,7 @@ def main():
                         #args.no_similarity_std)
                 loss.backward()
                 optimizer.step()
-                representation.detach_()
+
                 losses[n-1].update(float(loss.item()), float(targets.size(0)))
                 optimizer.zero_grad()
 
