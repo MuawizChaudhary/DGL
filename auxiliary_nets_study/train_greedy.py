@@ -287,7 +287,7 @@ def main():
             # We now log the statistics
             print('epoch: ' + str(epoch) + ' , lr: ' + str(lr_scheduler(layer_lr[-1], epoch-1, args)))
 
-            for n in range(n_cnn):
+            for m in range(n):
                 if layer_optim[n] is not None:
                     #wandb.log({"Layer " + str(n) + " train loss": losses[n].avg}, step=epoch)
                     top1test = validate(test_loader, model, epoch, n, args.loss_sup, args.cuda)
