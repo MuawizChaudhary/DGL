@@ -234,66 +234,67 @@ def main():
     layer_optim, layer_lr = optim_init(n_cnn, model, args)
 ######################### Lets do the training
     for n in range(n_cnn):
-        for epoch in range(0, args.epochs+1):
-            # Make sure we set the bn right
-            model.train()
-            losses = [AverageMeter() for _ in range(n_cnn)]
+        if layer_optim[n] is not None:
+            for epoch in range(0, args.epochs+1):
+                # Make sure we set the bn right
+                model.train()
+                losses = [AverageMeter() for _ in range(n_cnn)]
 
 
-            for i, (inputs, targets) in enumerate(train_loader):
-                if args.cuda:
-                    targets = targets.cuda(non_blocking = True)
-                    inputs = inputs.cuda(non_blocking = True)
+                for i, (inputs, targets) in enumerate(train_loader):
+                    if args.cuda:
+                        targets = targets.cuda(non_blocking = True)
+                        inputs = inputs.cuda(non_blocking = True)
 
-                target_onehot = to_one_hot(targets, 10)
-                if args.cuda:
-                    target_onehot = target_onehot.cuda(non_blocking = True)
+                    target_onehot = to_one_hot(targets, 10)
+                    if args.cuda:
+                        target_onehot = target_onehot.cuda(non_blocking = True)
 
 
-                representation = inputs
-                pred=None
-                sim=None
+                    representation = inputs
+                    pred=None
+                    sim=None
+                    for m in range(n):
+                        # Forward
+                        pred, sim, representation = model(representation, n=m)
+
+                    representation.detach_()
+                    pred, sim, representation = model(representation, n=n)
+                    optimizer = layer_optim[n]
+
+
+                    loss = loss_calc(pred, sim, targets, target_onehot,
+                            args)#.loss_sup, args.beta,
+                            #args.no_similarity_std)
+                    loss.backward()
+                    optimizer.step()
+
+                    losses[n].update(float(loss.item()), float(targets.size(0)))
+                    optimizer.zero_grad()
+
+                if args.lr_schd == 'nokland' or args.lr_schd == 'step':
+                    for m in range(n):
+                        layer_lr[m] = lr_scheduler(layer_lr[m], epoch-1, args)
+                        optimizer = layer_optim[m]
+                        for param_group in optimizer.param_groups:
+                            param_group['lr'] = layer_lr[m]
+                elif args.lr_schd == 'constant':
+                    closest_i = max([c for c, i in enumerate(args.lr_decay_milestones) if i <= epoch])
+                    for m in range(n):
+                        optimizer = layer_optim[m]
+                        for param_group in optimizer.param_groups:
+                            param_group['lr'] = args.lr_schedule[closest_i]
+
+
+                # We now log the statistics
+                print('epoch: ' + str(epoch) + ' , lr: ' + str(lr_scheduler(layer_lr[-1], epoch-1, args)))
+
                 for m in range(n):
-                    # Forward
-                    pred, sim, representation = model(representation, n=m)
-
-                representation.detach_()
-                pred, sim, representation = model(representation, n=n)
-                optimizer = layer_optim[n]
-
-
-                loss = loss_calc(pred, sim, targets, target_onehot,
-                        args)#.loss_sup, args.beta,
-                        #args.no_similarity_std)
-                loss.backward()
-                optimizer.step()
-
-                losses[n].update(float(loss.item()), float(targets.size(0)))
-                optimizer.zero_grad()
-
-            if args.lr_schd == 'nokland' or args.lr_schd == 'step':
-                for m in range(n):
-                    layer_lr[m] = lr_scheduler(layer_lr[m], epoch-1, args)
-                    optimizer = layer_optim[m]
-                    for param_group in optimizer.param_groups:
-                        param_group['lr'] = layer_lr[m]
-            elif args.lr_schd == 'constant':
-                closest_i = max([c for c, i in enumerate(args.lr_decay_milestones) if i <= epoch])
-                for m in range(n):
-                    optimizer = layer_optim[m]
-                    for param_group in optimizer.param_groups:
-                        param_group['lr'] = args.lr_schedule[closest_i]
-
-
-            # We now log the statistics
-            print('epoch: ' + str(epoch) + ' , lr: ' + str(lr_scheduler(layer_lr[-1], epoch-1, args)))
-
-            for m in range(n):
-                if layer_optim[m] is not None:
-                    #wandb.log({"Layer " + str(n) + " train loss": losses[n].avg}, step=epoch)
-                    top1test = validate(test_loader, model, epoch, m, args.loss_sup, args.cuda)
-                    print("n: {}, epoch {}, test top1:{} "
-                          .format(m + 1, epoch, top1test))
+                    if layer_optim[m] is not None:
+                        #wandb.log({"Layer " + str(n) + " train loss": losses[n].avg}, step=epoch)
+                        top1test = validate(test_loader, model, epoch, m, args.loss_sup, args.cuda)
+                        print("n: {}, epoch {}, test top1:{} "
+                              .format(m + 1, epoch, top1test))
     #col = sheet.col_values(4)
     #index = col.index(run.id)
     #sheet.update_cell(index + 1, 6, top1test)
