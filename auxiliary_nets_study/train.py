@@ -19,12 +19,12 @@ np.random.seed(25)
 import random
 random.seed(25)
 import sys
-import ast
+#import ast
 
 import torch.optim as optim
 from torchvision import datasets, transforms
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+#import gspread
+#from oauth2client.service_account import ServiceAccountCredentials
 
 
 # Training settings
@@ -221,14 +221,14 @@ def main():
 
     n_cnn = len(model.main_cnn.blocks)
 
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
+    #scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
     
-    creds = ServiceAccountCredentials.from_json_keyfile_name("creds.json", scope)
+    #creds = ServiceAccountCredentials.from_json_keyfile_name("creds.json", scope)
     
-    client = gspread.authorize(creds)
+    #client = gspread.authorize(creds)
     
-    sheet = client.open("Spreadsheet DGL").sheet1
-    sheet.append_row(insert_row, table_range='A1')
+    #sheet = client.open("Spreadsheet DGL").sheet1
+    #sheet.append_row(insert_row, table_range='A1')
 
     # Define optimizer en local lr
     layer_optim, layer_lr = optim_init(n_cnn, model, args)
@@ -287,9 +287,9 @@ def main():
                 top1test = validate(test_loader, model, epoch, n, args.loss_sup, args.cuda)
                 print("n: {}, epoch {}, test top1:{} "
                       .format(n + 1, epoch, top1test))
-    col = sheet.col_values(4)
-    index = col.index(run.id)
-    sheet.update_cell(index + 1, 6, top1test)
+    #col = sheet.col_values(4)
+    #index = col.index(run.id)
+    #sheet.update_cell(index + 1, 6, top1test)
 
 
 if __name__ == '__main__':
