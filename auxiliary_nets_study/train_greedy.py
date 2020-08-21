@@ -238,7 +238,7 @@ def main():
             for epoch in range(0, args.epochs+1):
                 # Make sure we set the bn right
                 model.train()
-                for m in range(n):
+                for m in range(n-1):
                     model.main_cnn.blocks[m].eval()
 
                 losses = [AverageMeter() for _ in range(n_cnn)]
