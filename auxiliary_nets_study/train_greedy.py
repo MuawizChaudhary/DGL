@@ -239,7 +239,7 @@ def main():
                 # Make sure we set the bn right
                 model.train()
                 for m in range(n):
-                    model.main_cnn[0].blocks[m].eval()
+                    model.main_cnn.blocks[m].eval()
 
                 losses = [AverageMeter() for _ in range(n_cnn)]
 
