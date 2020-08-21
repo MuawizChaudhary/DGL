@@ -287,13 +287,19 @@ def main():
             for n in range(n_cnn):
                 layer_lr[n] = lr_scheduler(layer_lr[n], epoch-1, args)
                 optimizer = layer_optim[n]
+                optimizer2 = layer_optim2[n]
                 for param_group in optimizer.param_groups:
+                    param_group['lr'] = layer_lr[n]
+                for param_group in optimizer2.param_groups:
                     param_group['lr'] = layer_lr[n]
         elif args.lr_schd == 'constant':
             closest_i = max([c for c, i in enumerate(args.lr_decay_milestones) if i <= epoch])
             for n in range(n_cnn):
                 optimizer = layer_optim[n]
+                optimizer2 = layer_optim2[n]
                 for param_group in optimizer.param_groups:
+                    param_group['lr'] = args.lr_schedule[closest_i]
+                for param_group in optimizer2.param_groups:
                     param_group['lr'] = args.lr_schedule[closest_i]
         
 
