@@ -127,7 +127,7 @@ def main():
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     
-    run = wandb.init(config=args, project="dgl-refactored", notes=args.notes)
+    #run = wandb.init(config=args, project="dgl-refactored", notes=args.notes)
     import uuid
     filename = "logs/" + str(uuid.uuid4())
     import git
