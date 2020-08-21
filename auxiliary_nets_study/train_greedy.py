@@ -233,7 +233,7 @@ def main():
     # Define optimizer en local lr
     layer_optim, layer_lr = optim_init(n_cnn, model, args)
 ######################### Lets do the training
-    for n in range(n_cnn):
+    for n in range(1,n_cnn):
         for epoch in range(0, args.epochs+1):
             # Make sure we set the bn right
             model.train()
