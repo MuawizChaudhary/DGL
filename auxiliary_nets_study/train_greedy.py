@@ -238,6 +238,9 @@ def main():
             for epoch in range(0, args.epochs+1):
                 # Make sure we set the bn right
                 model.train()
+                for m in range(n):
+                    model.module[0].blocks[m].eval()
+
                 losses = [AverageMeter() for _ in range(n_cnn)]
 
 
@@ -254,9 +257,10 @@ def main():
                     representation = inputs
                     pred=None
                     sim=None
-                    for m in range(n-1):
-                        # Forward
-                        pred, sim, representation = model(representation, n=m)
+                    with torch.no_grad():
+                        for m in range(n-1):
+                            # Forward
+                            pred, sim, representation = model(representation, n=m)
 
                     representation.detach_()
                     pred, sim, representation = model(representation, n=n-1)
