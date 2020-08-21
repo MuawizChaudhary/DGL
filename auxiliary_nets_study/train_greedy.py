@@ -233,7 +233,7 @@ def main():
     # Define optimizer en local lr
     layer_optim, layer_lr = optim_init(n_cnn, model, args)
 ######################### Lets do the training
-    for n in range(1,n_cnn):
+    for n in range(n_cnn):
         for epoch in range(0, args.epochs+1):
             # Make sure we set the bn right
             model.train()
@@ -255,10 +255,11 @@ def main():
                 sim=None
                 for m in range(n):
                     # Forward
-                    representation.detach_()
                     pred, sim, representation = model(representation, n=m)
 
-                optimizer = layer_optim[n-1]
+                representation.detach_()
+                pred, sim, representation = model(representation, n=n)
+                optimizer = layer_optim[n]
 
 
                 loss = loss_calc(pred, sim, targets, target_onehot,
@@ -267,7 +268,7 @@ def main():
                 loss.backward()
                 optimizer.step()
 
-                losses[n-1].update(float(loss.item()), float(targets.size(0)))
+                losses[n].update(float(loss.item()), float(targets.size(0)))
                 optimizer.zero_grad()
 
             if args.lr_schd == 'nokland' or args.lr_schd == 'step':
