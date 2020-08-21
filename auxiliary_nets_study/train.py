@@ -13,7 +13,7 @@ from models import VGGn
 from settings import parse_args
 from utils import to_one_hot,  AverageMeter,  loss_calc, test, validate
 from resnet import resnet18, resnet34, resnet50, resnet101, resnet152
-import wandb
+#import wandb
 import numpy as np
 np.random.seed(25)
 import random
@@ -154,8 +154,8 @@ def main():
     if args.cuda:
         torch.cuda.manual_seed(args.seed)
 
-    url = 'https://app.wandb.ai/muawizc/dgl-refactored/runs/' + run.id
-    insert_row = [sha, args.lr_schd, '', run.id, url, '0', url + "/overview", '', run.notes]
+    #url = 'https://app.wandb.ai/muawizc/dgl-refactored/runs/' + run.id
+    #insert_row = [sha, args.lr_schd, '', run.id, url, '0', url + "/overview", '', run.notes]
 
 
     # data loader
@@ -283,7 +283,7 @@ def main():
             
         for n in range(n_cnn):
             if layer_optim[n] is not None:
-                wandb.log({"Layer " + str(n) + " train loss": losses[n].avg}, step=epoch)
+                #wandb.log({"Layer " + str(n) + " train loss": losses[n].avg}, step=epoch)
                 top1test = validate(test_loader, model, epoch, n, args.loss_sup, args.cuda)
                 print("n: {}, epoch {}, test top1:{} "
                       .format(n + 1, epoch, top1test))
