@@ -271,15 +271,15 @@ def main():
                 optimizer.zero_grad()
 
             if args.lr_schd == 'nokland' or args.lr_schd == 'step':
-                for n in range(n_cnn):
-                    layer_lr[n] = lr_scheduler(layer_lr[n], epoch-1, args)
-                    optimizer = layer_optim[n]
+                for m in range(n):
+                    layer_lr[m] = lr_scheduler(layer_lr[m], epoch-1, args)
+                    optimizer = layer_optim[m]
                     for param_group in optimizer.param_groups:
-                        param_group['lr'] = layer_lr[n]
+                        param_group['lr'] = layer_lr[m]
             elif args.lr_schd == 'constant':
                 closest_i = max([c for c, i in enumerate(args.lr_decay_milestones) if i <= epoch])
-                for n in range(n_cnn):
-                    optimizer = layer_optim[n]
+                for m in range(n):
+                    optimizer = layer_optim[m]
                     for param_group in optimizer.param_groups:
                         param_group['lr'] = args.lr_schedule[closest_i]
 
@@ -288,11 +288,11 @@ def main():
             print('epoch: ' + str(epoch) + ' , lr: ' + str(lr_scheduler(layer_lr[-1], epoch-1, args)))
 
             for m in range(n):
-                if layer_optim[n] is not None:
+                if layer_optim[m] is not None:
                     #wandb.log({"Layer " + str(n) + " train loss": losses[n].avg}, step=epoch)
-                    top1test = validate(test_loader, model, epoch, n, args.loss_sup, args.cuda)
+                    top1test = validate(test_loader, model, epoch, m, args.loss_sup, args.cuda)
                     print("n: {}, epoch {}, test top1:{} "
-                          .format(n + 1, epoch, top1test))
+                          .format(m + 1, epoch, top1test))
     #col = sheet.col_values(4)
     #index = col.index(run.id)
     #sheet.update_cell(index + 1, 6, top1test)
