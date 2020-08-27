@@ -1,9 +1,7 @@
-#! /usr/bin/env python3
-
-
 import argparse
 import torch
 import torch.nn.parallel
+import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 import torch.utils.data
 import time
@@ -23,6 +21,7 @@ import sys
 import random
 import torch.optim as optim
 from torchvision import datasets, transforms
+import matplotlib.pyplot as plt
 #import gspread
 #from oauth2client.service_account import ServiceAccountCredentials
 
@@ -32,7 +31,7 @@ from torchvision import datasets, transforms
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                     help='input batch size for training (default: 64)')
-parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
+parser.add_argument('--test-batch-size', type=int, default=250, metavar='N',
                     help='input batch size for testing (default: 1000)')
 parser.add_argument('--epochs', type=int, default=400, metavar='N',
                     help='number of epochs to train (default: 10)')
@@ -94,34 +93,28 @@ parser.add_argument('--aux-bn', action='store_true', default=False,
                     help='batch norm in auxillary layers')
 parser.add_argument('--notes', nargs='+', default="none", type=str, help="notes for wandb")
 
+def accuracy(output, target, topk=(1,)):
+    """Computes the precision@k for the specified values of k"""
+    maxk = max(topk)
+    batch_size = target.size(0)
+            
+    _, pred = output.topk(maxk, 1, True, True)
+    pred = pred.t()
+    correct = pred.eq(target.view(1, -1).expand_as(pred))
+                        
+    res = []
+    for k in topk:
+        correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
+        res.append(correct_k.mul_(100.0 / batch_size))
+    return res
 
 
 
 
-##################### Logs
-def lr_scheduler(lr, epoch, args):
-    if args.optim == "adam":
-        lr = lr * args.lr_decay_fact ** bisect_right(args.lr_decay_milestones, (epoch))
-    elif args.optim == "adam" or args.optim == "sgd":
-        if (epoch+2) % args.lr_decay_epoch == 0:
-            lr = lr * args.lr_decay_fact
-        else:
-            lr = lr
-    return lr
-
-def optim_init(ncnn, model, args):
-    layer_optim = [None] * ncnn
-    layer_lr = [args.lr] * ncnn
-    for n in range(ncnn):
-        to_train = itertools.chain(model.main_cnn.blocks[n].parameters(), model.auxillary_nets[n].parameters())
-        if args.optim == "adam":
-            layer_optim[n] = optim.Adam(to_train, lr=layer_lr[n],
-                    weight_decay=args.weight_decay, amsgrad=args.optim == 'amsgrad')
-        elif args.optim == "sgd":
-            layer_optim[n] = optim.SGD(to_train, lr=layer_lr[n],
-                    momentum=args.momentum, weight_decay=args.weight_decay)
-    return layer_optim, layer_lr
-
+def validate(val_loader, model, epoch, n, loss_sup, iscuda):
+            #wandb.log({"Layer " + str(n) + " test loss": losses.avg}, step=epoch)
+        #wandb.log({"Layer " + str(n) + " top1": top1.avg}, step=epoch)
+    return top1.avg
 
 def main():
     args = parser.parse_args()
@@ -159,18 +152,8 @@ def main():
 
 
     # data loader
-    train_transform = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize((0.424, 0.415, 0.384), (0.283, 0.278, 0.284))
-    ])
-    dataset_train = datasets.CIFAR10('../data/CIFAR10', train=True, download=True, transform=train_transform)
-    train_loader = torch.utils.data.DataLoader(
-        dataset_train,
-        sampler=None,
-        batch_size=args.batch_size, shuffle=True, num_workers=4)
-    test_loader = torch.utils.data.DataLoader(
+    
+    val_loader = torch.utils.data.DataLoader(
         datasets.CIFAR10('../data/CIFAR10', train=False,
                          transform=transforms.Compose([
                              transforms.ToTensor(),
@@ -215,111 +198,73 @@ def main():
         print('No valid model defined')
 
     #wandb.watch(model)
-    if args.cuda:
-        model = model.cuda()
+    #if args.cuda:
+    #    model = model.cuda()
     print(model)
 
     import copy
     model2 = copy.deepcopy(model)
-
+    model.load_state_dict(torch.load('model_1'))
+    model2.load_state_dict(torch.load('model_2'))
     n_cnn = len(model.main_cnn.blocks)
+    n = n_cnn
 
-    #scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
-    
-    #creds = ServiceAccountCredentials.from_json_keyfile_name("creds.json", scope)
-    
-    #client = gspread.authorize(creds)
-    
-    #sheet = client.open("Spreadsheet DGL").sheet1
-    #sheet.append_row(insert_row, table_range='A1')
-
-    # Define optimizer en local lr
-    layer_optim, layer_lr = optim_init(n_cnn, model, args)
-    layer_optim2, layer_lr2 = optim_init(n_cnn, model2, args)
 ######################### Lets do the training
-    for epoch in range(0, args.epochs+1):
-        # Make sure we set the bn right
-        model.train()
-        model2.train()
-        torch.save(model.state_dict(), 'model_1')
-        torch.save(model.state_dict(), 'model_2')
-        losses = [AverageMeter() for _ in range(n_cnn)]
-        losses2 = [AverageMeter() for _ in range(n_cnn)]
-        
-        for i, (inputs, targets) in enumerate(train_loader):
-            if args.cuda:
-                targets = targets.cuda(non_blocking = True)
-                inputs = inputs.cuda(non_blocking = True)
-            
-            target_onehot = to_one_hot(targets, 10)
-            if args.cuda:
-                target_onehot = target_onehot.cuda(non_blocking = True)
+    losses = AverageMeter()
+    top1 = AverageMeter()
 
+    model.eval()
+    model2.eval()
+    with torch.no_grad():
+        total = 0
+        histogram = [AverageMeter()]*256
+        for i, (input, target) in enumerate(val_loader):
+            target = target#.cuda(non_blocking=True)
+            input = input#.cuda(non_blocking=True)
 
-            representation = inputs
-            for n in range(n_cnn):
+            representation = input
+            array = [representation]
+            array_2 = []
+            for k in range(n_cnn-1):
+                for rep in array:
+                    #rep = rep.cuda(non_blocking=True)
+                    output, _, rep_1 = model(rep, n=k)
+                    array_2.append(rep_1)
+                    output, _, rep_2 = model2(rep, n=k)
+                    array_2.append(rep_2)
+                    del rep
+                array = array_2
+                array_2 = []
+            for rep in array:
+                #rep = rep.cuda(non_blocking=True)
+                output, _, rep_1 = model(rep, n=n-1)
+                array_2.append(output)
+                output, _, rep_2 = model2(rep, n=n-1)
+                array_2.append(output)
+            for c, out in enumerate(array_2):
+               histogram[c].update(float(accuracy(out.data, target)[0]), float(input.size(0)))
+            array = torch.mean(torch.stack(array_2, dim=0), dim=0)
+            # measure accuracy and record loss
+            loss = F.cross_entropy(array, target)
+            losses.update(float(loss.item()), float(input.size(0)))
+            prec1 = accuracy(array.data, target)
+            print(str(float(prec1[0])), str(float(loss.item())))
+            top1.update(float(prec1[0]), float(input.size(0)))
 
-                # Forward
-                if random.uniform(0,1) > 0.5:
-                    optimizer = layer_optim[n]
-                    pred, sim, representation = model(representation, n=n)
-                    loss = loss_calc(pred, sim, targets, target_onehot,
-                                     args)  # .loss_sup, args.beta,
-                    # args.no_similarity_std)
-                    loss.backward()
-                    optimizer.step()
-                    representation.detach_()
-                    losses[n].update(float(loss.item()), float(targets.size(0)))
-                    optimizer.zero_grad()
+            total += input.size(0)
 
-                else:
-                    optimizer = layer_optim2[n]
-                    pred, sim, representation = model2(representation, n=n)
+        hist = []
+        for a in histogram:
+            hist.append(a.avg)
+        fig = plt.hist(hist, bins=256)
+        plt.title('Model average Accuracy') 
+        plt.xlabel('Model')
+        plt.ylabel('Accuracy')
+        plt.savefig('histogram.png')
 
-                    loss = loss_calc(pred, sim, targets, target_onehot,
-                            args)#.loss_sup, args.beta,
-                            #args.no_similarity_std)
-                    loss.backward()
-                    optimizer.step()
-                    representation.detach_()
-                    losses2[n].update(float(loss.item()), float(targets.size(0)))
-                    optimizer.zero_grad()
+        print()
+        print(top1.avg, losses.avg) 
 
-        if args.lr_schd == 'nokland' or args.lr_schd == 'step':
-            for n in range(n_cnn):
-                layer_lr[n] = lr_scheduler(layer_lr[n], epoch-1, args)
-                optimizer = layer_optim[n]
-                optimizer2 = layer_optim2[n]
-                for param_group in optimizer.param_groups:
-                    param_group['lr'] = layer_lr[n]
-                for param_group in optimizer2.param_groups:
-                    param_group['lr'] = layer_lr[n]
-        elif args.lr_schd == 'constant':
-            closest_i = max([c for c, i in enumerate(args.lr_decay_milestones) if i <= epoch])
-            for n in range(n_cnn):
-                optimizer = layer_optim[n]
-                optimizer2 = layer_optim2[n]
-                for param_group in optimizer.param_groups:
-                    param_group['lr'] = args.lr_schedule[closest_i]
-                for param_group in optimizer2.param_groups:
-                    param_group['lr'] = args.lr_schedule[closest_i]
-        
-
-        # We now log the statistics
-        print('epoch: ' + str(epoch) + ' , lr: ' + str(lr_scheduler(layer_lr[-1], epoch-1, args)))
-            
-        for n in range(n_cnn):
-            if layer_optim[n] is not None:
-                #wandb.log({"Layer " + str(n) + " train loss": losses[n].avg}, step=epoch)
-                top1test = validate(test_loader, model, epoch, n, args.loss_sup, args.cuda)
-                print("CNN 1- n: {}, epoch {}, test top1:{} "
-                      .format(n + 1, epoch, top1test))
-                top1test = validate(test_loader, model2, epoch, n, args.loss_sup, args.cuda)
-                print("CNN 2- n: {}, epoch {}, test top1:{} "
-                      .format(n + 1, epoch, top1test))
-    #col = sheet.col_values(4)
-    #index = col.index(run.id)
-    #sheet.update_cell(index + 1, 6, top1test)
 
 
 if __name__ == '__main__':
