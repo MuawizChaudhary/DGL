@@ -256,7 +256,8 @@ def main():
         hist = []
         for a in histogram:
             hist.append(a.avg)
-        fig = plt.hist(hist, bins=256)
+        
+        fig = plt.hist(hist, bins='auto')
         plt.title('Model average Accuracy') 
         plt.xlabel('Model')
         plt.ylabel('Accuracy')
