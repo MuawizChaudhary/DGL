@@ -347,12 +347,27 @@ def main():
                     for k in range(n_cnn):
                         pred, sim, representation = models[rand_layer[k]](representation, n=k)
                     prec1 = accuracy(pred.data, target)
-                    print(str(float(prec1[0])), str(float(loss.item())))
                     top1.update(float(prec1[0]), float(input.size(0)))
-
-
             print("random test, test top1:{} ".format(top1.avg))
 
+            rand_layer = [0 for iter in range(n_cnn)]
+            for c in range(0, N):
+                models[c].eval()
+
+            with torch.no_grad():
+                top1 = AverageMeter()
+
+                for i, (input, target) in enumerate(test_loader):
+                    target = target.cuda(non_blocking=True)
+                    input = input.cuda(non_blocking=True)
+
+                    representation = input
+                    pred = []
+                    for k in range(n_cnn):
+                        pred, sim, representation = models[rand_layer[k]](representation, n=k)
+                    prec1 = accuracy(pred.data, target)
+                    top1.update(float(prec1[0]), float(input.size(0)))
+            print("not random test, test top1:{} ".format(top1.avg))
 
 if __name__ == '__main__':
     main()
