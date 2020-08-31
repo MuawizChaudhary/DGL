@@ -225,7 +225,7 @@ def main():
         for i in range(256):
             histogram.append(AverageMeter())
         for i, (input, target) in enumerate(val_loader):
-            print(i)
+            print(str(i)+'/'+str(len(val_loader)))
             target = target#.cuda(non_blocking=True)
             input = input#.cuda(non_blocking=True)
 
@@ -252,17 +252,16 @@ def main():
                 array_2.append(output.cpu())
             for c, out in enumerate(array_2):
                histogram[c].update(float(accuracy(out.data, target)[0]), float(input.size(0)))
-               print(histogram[c].avg, str(float(accuracy(out.data, target)[0])))
+
             array = torch.mean(torch.stack(array_2, dim=0), dim=0)
             # measure accuracy and record loss
             loss = F.cross_entropy(array, target)
             losses.update(float(loss.item()), float(input.size(0)))
             prec1 = accuracy(array.data, target)
-            print(str(float(prec1[0])), str(float(loss.item())))
+            #print(str(float(prec1[0])), str(float(loss.item())))
             top1.update(float(prec1[0]), float(input.size(0)))
 
             total += input.size(0)
-
         hist = []
         for a in histogram:
             print(a.avg)
@@ -271,7 +270,6 @@ def main():
         fig = plt.hist(hist, bins=10)
         plt.savefig('histogram.png')
 
-        print()
         print(top1.avg, losses.avg) 
 
 
