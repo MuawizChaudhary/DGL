@@ -178,50 +178,60 @@ def main():
                          ])),
         batch_size=args.test_batch_size, shuffle=False, num_workers=2)
 
-    # Model
-    if args.model.startswith('vgg'):
-        model = VGGn(args.model, feat_mult=args.feat_mult, dropout=args.dropout, nonlin=args.nonlin,
-                     loss_sup=args.loss_sup, dim_in_decoder=args.dim_in_decoder, num_layers=args.num_layers,
-                     num_hidden=args.num_hidden, aux_type=args.aux_type,
-                     n_mlp=args.n_mlp, n_conv=args.n_conv, pooling=args.pooling,
-                     bn=args.bn, aux_bn=args.aux_bn)
-    elif args.model == 'resnet18':
-        model = resnet18(n_conv=args.n_conv, mlp=args.n_mlp,
-                         block_size=args.block_size,
-                         pooling=args.pooling,
-                         loss_sup=args.loss_sup)
-    elif args.model == 'resnet34':
-        model = resnet34(n_conv=args.n_conv, mlp=args.n_mlp,
-                         block_size=args.block_size,
-                         pooling=args.pooling,
-                         loss_sup=args.loss_sup)
-    elif args.model == 'resnet50':
-        model = resnet50(n_conv=args.n_conv, mlp=args.n_mlp,
-                         block_size=args.block_size,
-                         pooling=args.pooling,
-                         loss_sup=args.loss_sup)
-    elif args.model == 'resnet101':
-        model = resnet101(n_conv=args.n_conv, mlp=args.n_mlp,
-                          block_size=args.block_size,
-                          pooling=args.pooling,
-                          loss_sup=args.loss_sup)
-    elif args.model == 'resnet152':
-        model = resnet152(n_conv=args.n_conv, mlp=args.n_mlp,
-                          block_size=args.block_size,
-                          pooling=args.pooling,
-                          loss_sup=args.loss_sup)
-    else:
-        print('No valid model defined')
-
     # wandb.watch(model)
-    if args.cuda:
-        model = model.cuda()
-    print(model)
 
+    N = 2
     import copy
-    model2 = copy.deepcopy(model)
 
-    n_cnn = len(model.main_cnn.blocks)
+    models = []
+
+    for i in range(0, N - 1):
+        model = None
+
+
+        # Model
+        if args.model.startswith('vgg'):
+            model = VGGn(args.model, feat_mult=args.feat_mult, dropout=args.dropout, nonlin=args.nonlin,
+                         loss_sup=args.loss_sup, dim_in_decoder=args.dim_in_decoder, num_layers=args.num_layers,
+                         num_hidden=args.num_hidden, aux_type=args.aux_type,
+                         n_mlp=args.n_mlp, n_conv=args.n_conv, pooling=args.pooling,
+                         bn=args.bn, aux_bn=args.aux_bn)
+        elif args.model == 'resnet18':
+            model = resnet18(n_conv=args.n_conv, mlp=args.n_mlp,
+                             block_size=args.block_size,
+                             pooling=args.pooling,
+                             loss_sup=args.loss_sup)
+        elif args.model == 'resnet34':
+            model = resnet34(n_conv=args.n_conv, mlp=args.n_mlp,
+                             block_size=args.block_size,
+                             pooling=args.pooling,
+                             loss_sup=args.loss_sup)
+        elif args.model == 'resnet50':
+            model = resnet50(n_conv=args.n_conv, mlp=args.n_mlp,
+                             block_size=args.block_size,
+                             pooling=args.pooling,
+                             loss_sup=args.loss_sup)
+        elif args.model == 'resnet101':
+            model = resnet101(n_conv=args.n_conv, mlp=args.n_mlp,
+                              block_size=args.block_size,
+                              pooling=args.pooling,
+                              loss_sup=args.loss_sup)
+        elif args.model == 'resnet152':
+            model = resnet152(n_conv=args.n_conv, mlp=args.n_mlp,
+                              block_size=args.block_size,
+                              pooling=args.pooling,
+                              loss_sup=args.loss_sup)
+        else:
+            print('No valid model defined')
+
+        if args.cuda:
+            model = model.cuda()
+
+        models.append(model)
+
+
+
+    n_cnn = len(models[0].main_cnn.blocks)
 
     # scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]
 
@@ -233,15 +243,19 @@ def main():
     # sheet.append_row(insert_row, table_range='A1')
 
     # Define optimizer en local lr
-    layer_optim, layer_lr = optim_init(n_cnn, model, args)
-    layer_optim2, layer_lr2 = optim_init(n_cnn, model2, args)
+    layer_optim = []
+    layer_lr = []
+    for i in range(0, N):
+        model_optim, model_lr = optim_init(n_cnn, models[i], args)
+        layer_optim.append(model_optim)
+        layer_lr.append(model_lr)
     ######################### Lets do the training
     for epoch in range(0, args.epochs + 1):
         # Make sure we set the bn right
-        model.train()
-        model2.train()
-        losses = [AverageMeter() for _ in range(n_cnn)]
-        losses2 = [AverageMeter() for _ in range(n_cnn)]
+        for c in range(0, N):
+            models[c].train()
+            torch.save(models[c].state_dict(), 'model_' + str(c))
+        losses = [[AverageMeter() for _ in range(n_cnn)] for _ in range(0, N)]
 
         for i, (inputs, targets) in enumerate(train_loader):
             if args.cuda:
@@ -254,70 +268,42 @@ def main():
 
             representation = inputs
             for n in range(n_cnn):
-
                 # Forward
-                if random.uniform(0, 1) > 0.5:
-                    optimizer = layer_optim[n]
-                    pred, sim, representation = model(representation, n=n)
-                    loss = loss_calc(pred, sim, targets, target_onehot,
-                                     args)  # .loss_sup, args.beta,
-                    # args.no_similarity_std)
-                    loss.backward()
-                    optimizer.step()
-                    representation.detach_()
-                    losses[n].update(float(loss.item()), float(targets.size(0)))
-                    optimizer.zero_grad()
-
-                else:
-                    optimizer = layer_optim2[n]
-                    pred, sim, representation = model2(representation, n=n)
-
-                    loss = loss_calc(pred, sim, targets, target_onehot,
-                                     args)  # .loss_sup, args.beta,
-                    # args.no_similarity_std)
-                    loss.backward()
-                    optimizer.step()
-                    representation.detach_()
-                    losses2[n].update(float(loss.item()), float(targets.size(0)))
-                    optimizer.zero_grad()
-
+                index = random.randint(0, N - 1)
+                optimizer = layer_optim[index][n]
+                pred, sim, representation = models[index](representation, n=n)
+                loss = loss_calc(pred, sim, targets, target_onehot,
+                                 args)  # .loss_sup, args.beta,
+                # args.no_similarity_std)
+                loss.backward()
+                optimizer.step()
+                representation.detach_()
+                losses[index][n].update(float(loss.item()), float(targets.size(0)))
+                optimizer.zero_grad()
         if args.lr_schd == 'nokland' or args.lr_schd == 'step':
-            for n in range(n_cnn):
-                layer_lr[n] = lr_scheduler(layer_lr[n], epoch - 1, args)
-                optimizer = layer_optim[n]
-                optimizer2 = layer_optim2[n]
-                for param_group in optimizer.param_groups:
-                    param_group['lr'] = layer_lr[n]
-                for param_group in optimizer2.param_groups:
-                    param_group['lr'] = layer_lr[n]
+            for c in range(N):
+                for n in range(n_cnn):
+                    layer_lr[c][n] = lr_scheduler(layer_lr[c][n], epoch - 1, args)
+                    optimizer = layer_optim[c][n]
+                    for param_group in optimizer.param_groups:
+                        param_group['lr'] = layer_lr[c][n]
         elif args.lr_schd == 'constant':
             closest_i = max([c for c, i in enumerate(args.lr_decay_milestones) if i <= epoch])
-            for n in range(n_cnn):
-                optimizer = layer_optim[n]
-                optimizer2 = layer_optim2[n]
-                for param_group in optimizer.param_groups:
-                    param_group['lr'] = args.lr_schedule[closest_i]
-                for param_group in optimizer2.param_groups:
-                    param_group['lr'] = args.lr_schedule[closest_i]
+            for c in range(N):
+                for n in range(n_cnn):
+                    layer_lr[c][n] = lr_scheduler(layer_lr[c][n], epoch - 1, args)
+                    optimizer = layer_optim[c][n]
+                    for param_group in optimizer.param_groups:
+                        param_group['lr'] = args.lr_schedule[closest_i]
 
         # We now log the statistics
-        print('epoch: ' + str(epoch) + ' , lr: ' + str(lr_scheduler(layer_lr[-1], epoch - 1, args)))
-
-        for n in range(n_cnn):
-            if layer_optim[n] is not None:
-                # wandb.log({"Layer " + str(n) + " train loss": losses[n].avg}, step=epoch)
-                top1test = validate(test_loader, model, epoch, n, args.loss_sup, args.cuda)
-                print("CNN 1- n: {}, epoch {}, test top1:{} "
-                      .format(n + 1, epoch, top1test))
-                top1test = validate(test_loader, model2, epoch, n, args.loss_sup, args.cuda)
-                print("CNN 2- n: {}, epoch {}, test top1:{} "
-                      .format(n + 1, epoch, top1test))
-                # col = sheet.col_values(4)
-                # index = col.index(run.id)
-                # sheet.update_cell(index + 1, 6, top1test)
-
-    torch.save(model.state_dict(), 'model_1')
-    torch.save(model2.state_dict(), 'model_2')
+        print('epoch: ' + str(epoch) + ' , lr: ' + str(lr_scheduler(layer_lr[0][-1], epoch - 1, args)))
+        for c in range(0, N):
+            for n in range(n_cnn):
+                if layer_optim[c][n] is not None:
+                    #wandb.log({"Layer " + str(n) + " train loss": losses[n].avg}, step=epoch)
+                    top1test = validate(test_loader, models[c], epoch, n, args.loss_sup, args.cuda)
+                    print("CNN {}- n: {}, epoch {}, test top1:{} ".format(c, n + 1, epoch, top1test))
 
 
 if __name__ == '__main__':
