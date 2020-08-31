@@ -206,18 +206,16 @@ def main():
     model2 = copy.deepcopy(model)
     model.load_state_dict(torch.load('model_0'))
     model2.load_state_dict(torch.load('model_1'))
-    for c, i in enumerate(model.parameters()):
-        if c == 0:
-            print(i.data)
-    for c, i in enumerate(model2.parameters()):
-        if c == 0:
-            print(i.data)
+
     n_cnn = len(model.main_cnn.blocks)
     n = n_cnn
 
 ######################### Lets do the training
     losses = AverageMeter()
     top1 = AverageMeter()
+
+    model = model.cuda()
+    model2 = model2.cuda()
 
     model.eval()
     model2.eval()
@@ -227,6 +225,7 @@ def main():
         for i in range(256):
             histogram.append(AverageMeter())
         for i, (input, target) in enumerate(val_loader):
+            print(i)
             target = target#.cuda(non_blocking=True)
             input = input#.cuda(non_blocking=True)
 
@@ -235,12 +234,13 @@ def main():
             array_2 = []
             for k in range(n_cnn-1):
                 for rep in array:
+                    rep_ = rep.cuda()
                     #rep = rep.cuda(non_blocking=True)
-                    output, _, rep_1 = model(rep, n=k)
-                    array_2.append(rep_1)
-                    output, _, rep_2 = model2(rep, n=k)
-                    array_2.append(rep_2)
-                    del rep
+                    output, _, rep_1 = model(rep_, n=k)
+                    array_2.append(rep_1.cpu())
+                    output, _, rep_2 = model2(rep_, n=k)
+                    array_2.append(rep_2.cpu())
+                    #del rep
                 array = array_2
                 array_2 = []
             for rep in array:
