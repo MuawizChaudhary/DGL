@@ -331,7 +331,7 @@ def main():
                         top1test = validate(test_loader, models[c], epoch, n, args.loss_sup, args.cuda)
                         print("CNN {}- n: {}, epoch {}, test top1:{} ".format(c, n + 1, epoch, top1test))
         if args.edouard2:
-            rand_layer = random.sample(range(0, N), n_cnn)
+            rand_layer = [random.randint(0, N-1) for iter in range(n_cnn)]
             for c in range(0, N):
                 models[c].eval()
 
