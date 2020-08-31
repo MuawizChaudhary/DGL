@@ -245,10 +245,11 @@ def main():
                 array_2 = []
             for rep in array:
                 #rep = rep.cuda(non_blocking=True)
-                output, _, rep_1 = model(rep, n=n-1)
-                array_2.append(output)
-                output, _, rep_2 = model2(rep, n=n-1)
-                array_2.append(output)
+                rep_ = rep.cuda()
+                output, _, rep_1 = model(rep_, n=n-1)
+                array_2.append(output.cpu())
+                output, _, rep_2 = model2(rep_, n=n-1)
+                array_2.append(output.cpu())
             for c, out in enumerate(array_2):
                histogram[c].update(float(accuracy(out.data, target)[0]), float(input.size(0)))
                print(histogram[c].avg, str(float(accuracy(out.data, target)[0])))
