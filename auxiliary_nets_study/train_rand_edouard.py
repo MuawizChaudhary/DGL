@@ -300,12 +300,13 @@ def main():
 
         # We now log the statistics
         print('epoch: ' + str(epoch) + ' , lr: ' + str(lr_scheduler(layer_lr[0][-1], epoch - 1, args)))
-        for c in range(0, N):
-            for n in range(n_cnn):
-                if layer_optim[c][n] is not None:
-                    #wandb.log({"Layer " + str(n) + " train loss": losses[n].avg}, step=epoch)
-                    top1test = validate(test_loader, models[c], epoch, n, args.loss_sup, args.cuda)
-                    print("CNN {}- n: {}, epoch {}, test top1:{} ".format(c, n + 1, epoch, top1test))
+        if args.edouard:
+            for c in range(0, N):
+                for n in range(n_cnn):
+                    if layer_optim[c][n] is not None:
+                        #wandb.log({"Layer " + str(n) + " train loss": losses[n].avg}, step=epoch)
+                        top1test = validate(test_loader, models[c], epoch, n, args.loss_sup, args.cuda)
+                        print("CNN {}- n: {}, epoch {}, test top1:{} ".format(c, n + 1, epoch, top1test))
 
 
 if __name__ == '__main__':
