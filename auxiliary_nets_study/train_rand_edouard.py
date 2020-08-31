@@ -100,6 +100,29 @@ parser.add_argument('--notes', nargs='+', default="none", type=str, help="notes 
 parser.add_argument('--edouard', action='store_true', default=False,
                     help='display edouard stuff')
 
+parser.add_argument('--edouard2', action='store_true', default=False,
+                    help='display edouard stuff')
+
+
+def accuracy(output, target, topk=(1,)):
+    """Computes the precision@k for the specified values of k"""
+    maxk = max(topk)
+    batch_size = target.size(0)
+
+    _, pred = output.topk(maxk, 1, True, True)
+    pred = pred.t()
+    correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+    res = []
+    for k in topk:
+        correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
+        res.append(correct_k.mul_(100.0 / batch_size))
+    return res
+
+
+
+
+
 ##################### Logs
 def lr_scheduler(lr, epoch, args):
     if args.optim == "adam":
@@ -307,6 +330,28 @@ def main():
                         #wandb.log({"Layer " + str(n) + " train loss": losses[n].avg}, step=epoch)
                         top1test = validate(test_loader, models[c], epoch, n, args.loss_sup, args.cuda)
                         print("CNN {}- n: {}, epoch {}, test top1:{} ".format(c, n + 1, epoch, top1test))
+        if args.edouard2:
+            rand_layer = random.sample(range(0, N), n_cnn)
+            for c in range(0, N):
+                models[c].eval()
+
+            with torch.no_grad():
+                top1= AverageMeter()
+
+                for i, (input, target) in enumerate(test_loader):
+                    target = target  # .cuda(non_blocking=True)
+                    input = input  # .cuda(non_blocking=True)
+
+                    representation = input
+                    pred=[]
+                    for k in range(n_cnn):
+                        pred, sim, representation = models[rand_layer[k]](representation, n=k)
+                    prec1 = accuracy(pred.data, target)
+                    print(str(float(prec1[0])), str(float(loss.item())))
+                    top1.update(float(prec1[0]), float(input.size(0)))
+
+
+            print("random test, test top1:{} ".format(top1.avg))
 
 
 if __name__ == '__main__':
