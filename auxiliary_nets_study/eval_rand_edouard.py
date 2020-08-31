@@ -204,8 +204,8 @@ def main():
 
     import copy
     model2 = copy.deepcopy(model)
-    model.load_state_dict(torch.load('model_1'))
-    model2.load_state_dict(torch.load('model_2'))
+    model.load_state_dict(torch.load('model_0'))
+    model2.load_state_dict(torch.load('model_1'))
     for c, i in enumerate(model.parameters()):
         if c == 0:
             print(i.data)
