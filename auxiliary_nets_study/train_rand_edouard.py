@@ -185,7 +185,7 @@ def main():
 
     models = []
 
-    for i in range(0, N - 1):
+    for i in range(0, N ):
         model = None
 
 
