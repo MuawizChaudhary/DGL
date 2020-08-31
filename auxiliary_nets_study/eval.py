@@ -206,6 +206,12 @@ def main():
     model2 = copy.deepcopy(model)
     model.load_state_dict(torch.load('model_1'))
     model2.load_state_dict(torch.load('model_2'))
+    for c, i in enumerate(model.parameters()):
+        if c == 0:
+            print(i.data)
+    for c, i in enumerate(model2.parameters()):
+        if c == 0:
+            print(i.data)
     n_cnn = len(model.main_cnn.blocks)
     n = n_cnn
 
@@ -217,7 +223,9 @@ def main():
     model2.eval()
     with torch.no_grad():
         total = 0
-        histogram = [AverageMeter()]*256
+        histogram = []
+        for i in range(256):
+            histogram.append(AverageMeter())
         for i, (input, target) in enumerate(val_loader):
             target = target#.cuda(non_blocking=True)
             input = input#.cuda(non_blocking=True)
@@ -243,6 +251,7 @@ def main():
                 array_2.append(output)
             for c, out in enumerate(array_2):
                histogram[c].update(float(accuracy(out.data, target)[0]), float(input.size(0)))
+               print(histogram[c].avg, str(float(accuracy(out.data, target)[0])))
             array = torch.mean(torch.stack(array_2, dim=0), dim=0)
             # measure accuracy and record loss
             loss = F.cross_entropy(array, target)
@@ -255,12 +264,10 @@ def main():
 
         hist = []
         for a in histogram:
+            print(a.avg)
             hist.append(a.avg)
         
-        fig = plt.hist(hist, bins='auto')
-        plt.title('Model average Accuracy') 
-        plt.xlabel('Model')
-        plt.ylabel('Accuracy')
+        fig = plt.hist(hist, bins=10)
         plt.savefig('histogram.png')
 
         print()
