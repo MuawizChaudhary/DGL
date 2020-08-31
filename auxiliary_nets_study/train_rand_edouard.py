@@ -97,6 +97,8 @@ parser.add_argument('--aux-bn', action='store_true', default=False,
                     help='batch norm in auxillary layers')
 parser.add_argument('--notes', nargs='+', default="none", type=str, help="notes for wandb")
 
+parser.add_argument('--edouard', action='store_true', default=False,
+                    help='display edouard stuff')
 
 ##################### Logs
 def lr_scheduler(lr, epoch, args):
