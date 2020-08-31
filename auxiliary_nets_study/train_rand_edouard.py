@@ -339,8 +339,8 @@ def main():
                 top1= AverageMeter()
 
                 for i, (input, target) in enumerate(test_loader):
-                    target = target  # .cuda(non_blocking=True)
-                    input = input  # .cuda(non_blocking=True)
+                    target = target.cuda(non_blocking=True)
+                    input = input.cuda(non_blocking=True)
 
                     representation = input
                     pred=[]
