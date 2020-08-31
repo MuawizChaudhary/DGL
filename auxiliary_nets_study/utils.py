@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import os
-import wandb
 
 def to_one_hot(y, n_dims=None):
     ''' Take integer tensor y with n dims and convert it to 1-hot representation with n+1 dims. '''
