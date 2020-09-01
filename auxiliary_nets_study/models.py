@@ -286,21 +286,21 @@ class VGGn(nn.Module):
                  loss_sup="predsim", dim_in_decoder=2048, 
                  aux_type="nokland", n_mlp=0, bn=False,
                  aux_bn=False):
-        layers = nn.ModuleList([LocalLossBlockLinear(input_dim * input_dim * input_ch,
-                                                          num_hidden, num_classes, dropout=dropout, nonlin=nonlin,
-                                                          first_layer=True,
-                                                          bn=bn)])
+        #layers = nn.ModuleList([LocalLossBlockLinear(input_dim * input_dim * input_ch,
+        #                                                  num_hidden, num_classes, dropout=dropout, nonlin=nonlin,
+        #                                                  first_layer=True,
+        #                                                  bn=bn)])
 
-        auxillery_layers = nn.ModuleList([auxillary_linear_classifier(num_hidden,
-                num_classes=num_classes,
-                n_mlp=n_mlp, 
-                loss_sup=loss_sup, bn=aux_bn,
-                dropout=dropout)])
+        #auxillery_layers = nn.ModuleList([auxillary_linear_classifier(num_hidden,
+        #        num_classes=num_classes,
+        #        n_mlp=n_mlp, 
+        #        loss_sup=loss_sup, bn=aux_bn,
+        #        dropout=dropout)])
 
-        layer_out = Linear_Layer_Local_Loss(num_hidden, num_classes)
+        layer_out = nn.Sequential(View(), Linear_Layer_Local_Loss(1024*8,num_classes))
 
-        layers.extend([layer_out])
-        auxillery_layers.extend([Final_Layer_Local_Loss()])
+        layers = nn.ModuleList([layer_out])
+        auxillery_layers = nn.ModuleList([Final_Layer_Local_Loss()])
         return layers, auxillery_layers
 
 
