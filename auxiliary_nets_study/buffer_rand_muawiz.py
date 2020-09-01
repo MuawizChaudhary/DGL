@@ -360,8 +360,8 @@ def main():
     first_iter = True
     counter_first_iter = 0
     iteration_tracker = [0]*n_cnn
-    epoch_tracker = [-1]*n_cnn
-    epoch = -1
+    epoch_tracker = [0]*n_cnn
+    epoch = 0
     epoch_finished = [False for _ in range(n_cnn)]
     # trainloder is loaded up here
     trainloader_classifier_iterator = iter(train_loader)
@@ -421,6 +421,7 @@ def main():
                         param_group['lr'] = args.lr_schedule[closest_i]
             epoch_tracker[n_layer] = epoch_tracker[n_layer] + 1
             if epoch_tracker[n_layer]>=args.epochs:
+                print('f')
                 continue_to_train[n_layer] = False
             epoch_finished[n_layer]=False    
         representation = None
@@ -482,53 +483,44 @@ def main():
     
 
 
-                # We now log the statistics
-        print('epoch: ' + str(epoch) + ' , lr: ' + str(lr_scheduler(layer_lr[0][-1], epoch - 1, args)))
-        if args.edouard:
-            for c in range(0, N):
-                for n in range(n_cnn):
-                    if layer_optim[c][n] is not None:
-                        #wandb.log({"Layer " + str(n) + " train loss": losses[n].avg}, step=epoch)
-                        top1test = validate(test_loader, models[c], epoch, n, args.loss_sup, args.cuda)
-                        print("CNN {}- n: {}, epoch {}, test top1:{} ".format(c, n + 1, epoch, top1test))
-        if args.edouard2:
-            rand_layer = [random.randint(0, N-1) for iter in range(n_cnn)]
-            for c in range(0, N):
-                models[c].eval()
+    if args.edouard2:
+        rand_layer = [random.randint(0, N-1) for iter in range(n_cnn)]
+        for c in range(0, N):
+            models[c].eval()
 
-            with torch.no_grad():
-                top1= AverageMeter()
+        with torch.no_grad():
+            top1= AverageMeter()
 
-                for i, (input, target) in enumerate(test_loader):
-                    target = target.cuda(non_blocking=True)
-                    input = input.cuda(non_blocking=True)
+            for i, (input, target) in enumerate(test_loader):
+                target = target.cuda(non_blocking=True)
+                input = input.cuda(non_blocking=True)
 
-                    representation = input
-                    pred=[]
-                    for k in range(n_cnn):
-                        pred, sim, representation = models[rand_layer[k]](representation, n=k)
-                    prec1 = accuracy(pred.data, target)
-                    top1.update(float(prec1[0]), float(input.size(0)))
-            print("random test, test top1:{} ".format(top1.avg))
+                representation = input
+                pred=[]
+                for k in range(n_cnn):
+                    pred, sim, representation = models[rand_layer[k]](representation, n=k)
+                prec1 = accuracy(pred.data, target)
+                top1.update(float(prec1[0]), float(input.size(0)))
+        print("random test, test top1:{} ".format(top1.avg))
 
-            rand_layer = [0 for iter in range(n_cnn)]
-            for c in range(0, N):
-                models[c].eval()
+        rand_layer = [0 for iter in range(n_cnn)]
+        for c in range(0, N):
+            models[c].eval()
 
-            with torch.no_grad():
-                top1 = AverageMeter()
+        with torch.no_grad():
+            top1 = AverageMeter()
 
-                for i, (input, target) in enumerate(test_loader):
-                    target = target.cuda(non_blocking=True)
-                    input = input.cuda(non_blocking=True)
+            for i, (input, target) in enumerate(test_loader):
+                target = target.cuda(non_blocking=True)
+                input = input.cuda(non_blocking=True)
 
-                    representation = input
-                    pred = []
-                    for k in range(n_cnn):
-                        pred, sim, representation = models[rand_layer[k]](representation, n=k)
-                    prec1 = accuracy(pred.data, target)
-                    top1.update(float(prec1[0]), float(input.size(0)))
-            print("not random test, test top1:{} ".format(top1.avg))
+                representation = input
+                pred = []
+                for k in range(n_cnn):
+                    pred, sim, representation = models[rand_layer[k]](representation, n=k)
+                prec1 = accuracy(pred.data, target)
+                top1.update(float(prec1[0]), float(input.size(0)))
+        print("not random test, test top1:{} ".format(top1.avg))
 
 if __name__ == '__main__':
     main()
