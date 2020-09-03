@@ -255,7 +255,7 @@ def main():
         models.append(model)
 
 
-
+    print(models[0])
     n_cnn = len(models[0].main_cnn.blocks)
 
     # scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"]

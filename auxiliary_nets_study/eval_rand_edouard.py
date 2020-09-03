@@ -23,6 +23,7 @@ import torch.optim as optim
 from torchvision import datasets, transforms
 import matplotlib.pyplot as plt
 #import gspread
+import random
 #from oauth2client.service_account import ServiceAccountCredentials
 
 
@@ -161,64 +162,60 @@ def main():
                          ])),
         batch_size=args.test_batch_size, shuffle=False, num_workers=2)
 
+    N=2
+    models = []
+    for i in range(0, N ):
+        model = None
 
-    # Model
-    if args.model.startswith('vgg'):
-        model = VGGn(args.model, feat_mult=args.feat_mult, dropout=args.dropout,nonlin=args.nonlin,
-                      loss_sup= args.loss_sup, dim_in_decoder=args.dim_in_decoder, num_layers=args.num_layers,
-            num_hidden = args.num_hidden, aux_type=args.aux_type,
-            n_mlp=args.n_mlp, n_conv=args.n_conv, pooling=args.pooling,
-            bn=args.bn, aux_bn=args.aux_bn)
-    elif args.model == 'resnet18':
-        model = resnet18(n_conv=args.n_conv, mlp=args.n_mlp,
-                                       block_size=args.block_size,
-                                       pooling=args.pooling,
-                                       loss_sup=args.loss_sup)
-    elif args.model == 'resnet34':
-        model = resnet34(n_conv=args.n_conv, mlp=args.n_mlp,
-                                       block_size=args.block_size,
-                                       pooling=args.pooling,
-                                       loss_sup=args.loss_sup)
-    elif args.model == 'resnet50':
-        model = resnet50(n_conv=args.n_conv, mlp=args.n_mlp,
-                                       block_size=args.block_size,
-                                       pooling=args.pooling,
-                                       loss_sup=args.loss_sup)
-    elif args.model == 'resnet101':
-        model = resnet101(n_conv=args.n_conv, mlp=args.n_mlp,
-                                       block_size=args.block_size,
-                                       pooling=args.pooling,
-                                       loss_sup=args.loss_sup)
-    elif args.model == 'resnet152':
-        model = resnet152(n_conv=args.n_conv, mlp=args.n_mlp,
-                                       block_size=args.block_size,
-                                       pooling=args.pooling,
-                                       loss_sup=args.loss_sup)
-    else:
-        print('No valid model defined')
 
-    #wandb.watch(model)
-    #if args.cuda:
-    #    model = model.cuda()
-    print(model)
+        # Model
+        if args.model.startswith('vgg'):
+            model = VGGn(args.model, feat_mult=args.feat_mult, dropout=args.dropout, nonlin=args.nonlin,
+                         loss_sup=args.loss_sup, dim_in_decoder=args.dim_in_decoder, num_layers=args.num_layers,
+                         num_hidden=args.num_hidden, aux_type=args.aux_type,
+                         n_mlp=args.n_mlp, n_conv=args.n_conv, pooling=args.pooling,
+                         bn=args.bn, aux_bn=args.aux_bn)
+        elif args.model == 'resnet18':
+            model = resnet18(n_conv=args.n_conv, mlp=args.n_mlp,
+                             block_size=args.block_size,
+                             pooling=args.pooling,
+                             loss_sup=args.loss_sup)
+        elif args.model == 'resnet34':
+            model = resnet34(n_conv=args.n_conv, mlp=args.n_mlp,
+                             block_size=args.block_size,
+                             pooling=args.pooling,
+                             loss_sup=args.loss_sup)
+        elif args.model == 'resnet50':
+            model = resnet50(n_conv=args.n_conv, mlp=args.n_mlp,
+                             block_size=args.block_size,
+                             pooling=args.pooling,
+                             loss_sup=args.loss_sup)
+        elif args.model == 'resnet101':
+            model = resnet101(n_conv=args.n_conv, mlp=args.n_mlp,
+                              block_size=args.block_size,
+                              pooling=args.pooling,
+                              loss_sup=args.loss_sup)
+        elif args.model == 'resnet152':
+            model = resnet152(n_conv=args.n_conv, mlp=args.n_mlp,
+                              block_size=args.block_size,
+                              pooling=args.pooling,
+                              loss_sup=args.loss_sup)
+        else:
+            print('No valid model defined')
 
-    import copy
-    model2 = copy.deepcopy(model)
-    model.load_state_dict(torch.load('model_0'))
-    model2.load_state_dict(torch.load('model_1'))
-
-    n_cnn = len(model.main_cnn.blocks)
+        model.load_state_dict(torch.load('model_'+str(i)))
+        if args.cuda:
+            model = model.cuda()
+        model.eval()
+        models.append(model)
+    n_cnn = len(models[0].main_cnn.blocks)
     n = n_cnn
 
 ######################### Lets do the training
     losses = AverageMeter()
     top1 = AverageMeter()
 
-    model = model.cuda()
-    model2 = model2.cuda()
-
-    model.eval()
-    model2.eval()
+    indices = random.sample(range(256), 16)
     with torch.no_grad():
         total = 0
         histogram = []
@@ -235,25 +232,23 @@ def main():
             for k in range(n_cnn-1):
                 for rep in array:
                     rep_ = rep.cuda()
-                    #rep = rep.cuda(non_blocking=True)
-                    output, _, rep_1 = model(rep_, n=k)
-                    array_2.append(rep_1.cpu())
-                    output, _, rep_2 = model2(rep_, n=k)
-                    array_2.append(rep_2.cpu())
-                    #del rep
+                    for model in models:
+                        output, _, rep_1 = model(rep_, n=k)
+                        array_2.append(rep_1.cpu())
                 array = array_2
                 array_2 = []
             for rep in array:
-                #rep = rep.cuda(non_blocking=True)
                 rep_ = rep.cuda()
-                output, _, rep_1 = model(rep_, n=n-1)
-                array_2.append(output.cpu())
-                output, _, rep_2 = model2(rep_, n=n-1)
-                array_2.append(output.cpu())
+                for model in models:
+                    output, _, rep_1 = model(rep_, n=n-1)
+                    array_2.append(output.cpu())
             for c, out in enumerate(array_2):
                histogram[c].update(float(accuracy(out.data, target)[0]), float(input.size(0)))
-
-            array = torch.mean(torch.stack(array_2, dim=0), dim=0)
+            array = []
+            for i in indices:
+                array.append(array_2[i])
+            array = torch.stack(array, dim=0)
+            array = torch.mean(array, dim=0)
             # measure accuracy and record loss
             loss = F.cross_entropy(array, target)
             losses.update(float(loss.item()), float(input.size(0)))
@@ -263,9 +258,9 @@ def main():
 
             total += input.size(0)
         hist = []
-        for a in histogram:
-            print(a.avg)
-            hist.append(a.avg)
+        for i in indices:
+            print(histogram[i].avg)
+            hist.append(histogram[i].avg)
         
         fig = plt.hist(hist, bins=10)
         plt.savefig('histogram.png')

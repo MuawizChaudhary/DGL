@@ -157,7 +157,7 @@ cfg = {
     'vgg6a': [128, 'M', 256, 'M', 512, 'M', 512],
     'vgg6b': [128, 'M', 256, 'M', 512, 'M', 512, 'M'],
     'vgg8': [64, 'M', 128, 'M', 256, 'M', 512, 'M', 512, 'M'],
-    'vgg8a': [128, 256, 'M', 256, 512, 'M', 512, 'M', 512],
+    'vgg8a': [128//2, 256//2, 'M', 256//2, 512//2, 'M', 512//2, 'M', 512//2],
     'vgg8b': [128, 256, 'M', 256, 512, 'M', 512, 'M', 512, 'M'],
     'vgg11': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
     'vgg11b': [128, 128, 128, 256, 'M', 256, 512, 'M', 512, 512, 'M', 512, 'M'],
@@ -286,21 +286,21 @@ class VGGn(nn.Module):
                  loss_sup="predsim", dim_in_decoder=2048, 
                  aux_type="nokland", n_mlp=0, bn=False,
                  aux_bn=False):
-        #layers = nn.ModuleList([LocalLossBlockLinear(input_dim * input_dim * input_ch,
-        #                                                  num_hidden, num_classes, dropout=dropout, nonlin=nonlin,
-        #                                                  first_layer=True,
-        #                                                  bn=bn)])
+        layers = nn.ModuleList([LocalLossBlockLinear(input_dim * input_dim * input_ch,
+                                                          num_hidden, num_classes, dropout=dropout, nonlin=nonlin,
+                                                          first_layer=True,
+                                                          bn=bn)])
 
-        #auxillery_layers = nn.ModuleList([auxillary_linear_classifier(num_hidden,
-        #        num_classes=num_classes,
-        #        n_mlp=n_mlp, 
-        #        loss_sup=loss_sup, bn=aux_bn,
-        #        dropout=dropout)])
+        auxillery_layers = nn.ModuleList([auxillary_linear_classifier(num_hidden,
+                num_classes=num_classes,
+                n_mlp=n_mlp, 
+                loss_sup=loss_sup, bn=aux_bn,
+                dropout=dropout)])
 
-        layer_out = nn.Sequential(View(), Linear_Layer_Local_Loss(1024*8,num_classes))
+        layer_out = nn.Sequential(View(), Linear_Layer_Local_Loss(1024,num_classes))
 
-        layers = nn.ModuleList([layer_out])
-        auxillery_layers = nn.ModuleList([Final_Layer_Local_Loss()])
+        layers += [layer_out]
+        auxillery_layers += [Final_Layer_Local_Loss()]
         return layers, auxillery_layers
 
 
